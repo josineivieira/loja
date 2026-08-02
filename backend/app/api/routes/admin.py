@@ -1,7 +1,7 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies.auth import require_roles
@@ -22,7 +22,7 @@ from app.schemas.category import CategoryCreate, CategoryRead, CategoryUpdate
 from app.schemas.checkout import OrderRead
 from app.schemas.integrations import IntegrationStatusRead
 from app.schemas.product import ProductCreate, ProductRead, ProductUpdate
-from app.schemas.supplier import SupplierOrderPayloadRead, SupplierSubmissionUpdate, SupplierTrackingUpdate
+from app.schemas.supplier import SupplierOrderPayloadRead, SupplierProductImportRequest, SupplierProductRead, SupplierSubmissionUpdate, SupplierTrackingUpdate
 from app.services.admin import AdminService
 from app.services.catalog import CatalogService
 from app.services.supplier import SupplierService
@@ -134,6 +134,16 @@ def update_shipping_method(method_id: uuid.UUID, payload: ShippingMethodUpdate, 
 @router.get("/supplier/orders", response_model=list[OrderRead])
 def list_supplier_orders(_: AdminUser, db: Annotated[Session, Depends(get_db)]) -> list[OrderRead]:
     return SupplierService(db).list_pending()
+
+
+@router.get("/supplier/cj/products", response_model=list[SupplierProductRead])
+def search_cj_products(q: Annotated[str, Query(min_length=2)], _: AdminUser, db: Annotated[Session, Depends(get_db)]) -> list[SupplierProductRead]:
+    return SupplierService(db).search_cj_products(q)
+
+
+@router.post("/supplier/cj/import", response_model=ProductRead, status_code=201)
+def import_cj_product(payload: SupplierProductImportRequest, _: AdminUser, db: Annotated[Session, Depends(get_db)]) -> ProductRead:
+    return SupplierService(db).import_cj_product(payload)
 
 
 @router.get("/supplier/orders/{order_number}/payload", response_model=SupplierOrderPayloadRead)

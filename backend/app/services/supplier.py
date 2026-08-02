@@ -1,6 +1,10 @@
+import re
+import uuid
 from decimal import Decimal
+from typing import Any
 
 from fastapi import HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -8,8 +12,18 @@ from app.integrations.cj_dropshipping.cj_provider import CJDropshippingProvider
 from app.integrations.cj_dropshipping.exceptions import CJDropshippingError
 from app.integrations.cj_dropshipping.manual_provider import ManualSupplierProvider
 from app.models.order import Order
+from app.models.product import Product, ProductImage, ProductVariant
+from app.models.supplier import Supplier
 from app.repositories.supplier import SupplierRepository
-from app.schemas.supplier import SupplierOrderItemRead, SupplierOrderPayloadRead, SupplierSubmissionUpdate, SupplierTrackingUpdate
+from app.schemas.supplier import (
+    SupplierOrderItemRead,
+    SupplierOrderPayloadRead,
+    SupplierProductImportRequest,
+    SupplierProductRead,
+    SupplierProductVariantRead,
+    SupplierSubmissionUpdate,
+    SupplierTrackingUpdate,
+)
 
 
 class SupplierService:
@@ -19,6 +33,58 @@ class SupplierService:
 
     def list_pending(self) -> list[Order]:
         return self.repo.list_pending_orders()
+
+    def search_cj_products(self, query: str) -> list[SupplierProductRead]:
+        if not query.strip():
+            return []
+        try:
+            products = self.provider.search_products(query)
+        except CJDropshippingError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        return [self._map_supplier_product(item) for item in products[:20]]
+
+    def import_cj_product(self, payload: SupplierProductImportRequest) -> Product:
+        if self.repo.db.scalar(select(Product).where(Product.supplier_product_id == payload.supplier_product_id, Product.deleted_at.is_(None))):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="CJ product is already imported")
+        supplier = self._get_or_create_cj_supplier()
+        slug = self._unique_slug(payload.name)
+        product = Product(
+            supplier_id=supplier.id,
+            category_id=uuid.UUID(payload.category_id) if payload.category_id else None,
+            name=payload.name,
+            slug=slug,
+            short_description=payload.description[:500] if payload.description else None,
+            description=payload.description,
+            sku=self._unique_sku(payload.sku.upper(), Product),
+            supplier_sku=payload.supplier_sku or payload.sku,
+            supplier_product_id=payload.supplier_product_id,
+            cost_price=payload.cost_price,
+            sale_price=payload.sale_price,
+            currency="USD",
+            status="active",
+            featured=False,
+            is_new=True,
+            is_bestseller=False,
+        )
+        self.repo.db.add(product)
+        self.repo.db.flush()
+        self.repo.db.add(
+            ProductVariant(
+                product_id=product.id,
+                sku=self._unique_sku(f"{payload.sku.upper()}-CJ", ProductVariant),
+                supplier_variant_id=payload.supplier_variant_id,
+                price=payload.sale_price,
+                cost=payload.cost_price,
+                stock=payload.stock,
+                image_url=payload.image_url,
+                status="active",
+            )
+        )
+        if payload.image_url:
+            self.repo.db.add(ProductImage(product_id=product.id, url=payload.image_url, alt_text=payload.name, is_primary=True))
+        self.repo.db.commit()
+        self.repo.db.refresh(product)
+        return product
 
     def get_copyable_payload(self, order_number: str) -> SupplierOrderPayloadRead:
         order = self._get_order(order_number)
@@ -124,3 +190,98 @@ class SupplierService:
             "district": address.district,
             "postalCode": address.postal_code,
         }
+
+    def _get_or_create_cj_supplier(self) -> Supplier:
+        supplier = self.repo.db.scalar(select(Supplier).where(Supplier.code == "cj"))
+        if supplier:
+            return supplier
+        supplier = Supplier(name="CJ Dropshipping", code="cj", notes="Automated CJ Dropshipping API supplier")
+        self.repo.db.add(supplier)
+        self.repo.db.flush()
+        return supplier
+
+    def _unique_slug(self, name: str) -> str:
+        base = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "cj-product"
+        slug = base[:200]
+        index = 2
+        while self.repo.db.scalar(select(Product).where(Product.slug == slug)):
+            suffix = f"-{index}"
+            slug = f"{base[: 220 - len(suffix)]}{suffix}"
+            index += 1
+        return slug
+
+    def _unique_sku(self, value: str, model: type[Product] | type[ProductVariant]) -> str:
+        base = re.sub(r"[^A-Z0-9-]+", "-", value.upper()).strip("-") or "CJ-SKU"
+        sku = base[:100]
+        index = 2
+        while self.repo.db.scalar(select(model).where(model.sku == sku)):
+            suffix = f"-{index}"
+            sku = f"{base[: 120 - len(suffix)]}{suffix}"
+            index += 1
+        return sku
+
+    def _map_supplier_product(self, item: dict[str, Any]) -> SupplierProductRead:
+        supplier_product_id = str(self._pick(item, "pid", "productId", "id", "supplierProductId") or "")
+        name = str(self._pick(item, "productName", "name", "title", "productTitle") or "CJ Product")
+        image_url = self._first_image(self._pick(item, "productImage", "productImageSet", "image", "imageUrl", "productImages"))
+        variants_raw = self._pick(item, "variants", "variantList", "variantsList", "productVariantList") or []
+        variants = [self._map_supplier_variant(variant, name, image_url) for variant in variants_raw if isinstance(variant, dict)]
+        if not variants:
+            supplier_variant_id = str(self._pick(item, "vid", "variantId", "id") or supplier_product_id)
+            variants = [
+                SupplierProductVariantRead(
+                    supplier_variant_id=supplier_variant_id,
+                    sku=str(self._pick(item, "productSku", "sku", "productNum") or f"CJ-{supplier_product_id}"),
+                    name=name,
+                    price=self._decimal(self._pick(item, "sellPrice", "price", "productPrice", "listedPrice"), Decimal("0")),
+                    cost=self._decimal(self._pick(item, "sellPrice", "price", "productPrice", "listedPrice"), Decimal("0")),
+                    stock=int(self._decimal(self._pick(item, "stock", "inventory", "sellableQuantity"), Decimal("999"))),
+                    image_url=image_url,
+                )
+            ]
+        return SupplierProductRead(
+            supplier_product_id=supplier_product_id,
+            name=name,
+            sku=str(self._pick(item, "productSku", "sku", "productNum") or f"CJ-{supplier_product_id}"),
+            description=self._pick(item, "description", "productDescription"),
+            image_url=image_url,
+            variants=variants,
+            raw=item,
+        )
+
+    def _map_supplier_variant(self, item: dict[str, Any], fallback_name: str, fallback_image: str | None) -> SupplierProductVariantRead:
+        price = self._decimal(self._pick(item, "sellPrice", "price", "variantSellPrice", "listedPrice"), Decimal("0"))
+        return SupplierProductVariantRead(
+            supplier_variant_id=str(self._pick(item, "vid", "variantId", "id", "supplierVariantId") or ""),
+            sku=str(self._pick(item, "variantSku", "sku", "variantKey", "variantNameEn") or "CJ-VARIANT"),
+            name=self._pick(item, "variantName", "variantNameEn", "name") or fallback_name,
+            price=price,
+            cost=self._decimal(self._pick(item, "costPrice", "variantStandard", "standard", "price"), price),
+            stock=int(self._decimal(self._pick(item, "stock", "inventory", "sellableQuantity"), Decimal("999"))),
+            image_url=self._first_image(self._pick(item, "variantImage", "image", "imageUrl")) or fallback_image,
+        )
+
+    def _pick(self, data: dict[str, Any], *keys: str) -> Any:
+        for key in keys:
+            if key in data and data[key] not in {None, ""}:
+                return data[key]
+        return None
+
+    def _first_image(self, value: Any) -> str | None:
+        if isinstance(value, str):
+            return value.split(",")[0].strip()
+        if isinstance(value, list) and value:
+            first = value[0]
+            if isinstance(first, str):
+                return first
+            if isinstance(first, dict):
+                return self._pick(first, "url", "image", "imageUrl")
+        return None
+
+    def _decimal(self, value: Any, fallback: Decimal) -> Decimal:
+        try:
+            if value is None or value == "":
+                return fallback
+            return Decimal(str(value).replace("$", "").strip())
+        except Exception:
+            return fallback

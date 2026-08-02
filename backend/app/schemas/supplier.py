@@ -45,3 +45,36 @@ class SupplierActionRead(BaseModel):
     supplier_order_id: str | None
     updated_at: datetime
 
+
+class SupplierProductVariantRead(BaseModel):
+    supplier_variant_id: str
+    sku: str
+    name: str | None = None
+    price: Decimal
+    cost: Decimal
+    stock: int
+    image_url: str | None = None
+
+
+class SupplierProductRead(BaseModel):
+    supplier_product_id: str
+    name: str
+    sku: str
+    description: str | None = None
+    image_url: str | None = None
+    variants: list[SupplierProductVariantRead]
+    raw: dict[str, Any] = {}
+
+
+class SupplierProductImportRequest(BaseModel):
+    supplier_product_id: str = Field(min_length=2, max_length=120)
+    name: str = Field(min_length=2, max_length=180)
+    sku: str = Field(min_length=2, max_length=100)
+    sale_price: Decimal = Field(ge=0)
+    cost_price: Decimal = Field(default=0, ge=0)
+    stock: int = Field(default=0, ge=0)
+    supplier_variant_id: str = Field(min_length=2, max_length=120)
+    supplier_sku: str | None = Field(default=None, max_length=120)
+    description: str | None = None
+    image_url: str | None = None
+    category_id: str | None = None

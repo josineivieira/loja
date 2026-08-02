@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 
 import { AdminTable } from "../../components/AdminTable";
-import { createAdminProduct, listAdminProducts } from "../../services/adminService";
-import type { Product } from "../../types/catalog";
+import { createAdminProduct, importCjProduct, listAdminProducts, searchCjProducts } from "../../services/adminService";
+import type { Product, SupplierProduct, SupplierProductVariant } from "../../types/catalog";
 import { formatMoney } from "../../utils/currency";
 
 function slugify(value: string) {
@@ -17,7 +17,11 @@ function slugify(value: string) {
 export function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [showCjImport, setShowCjImport] = useState(false);
   const [form, setForm] = useState({ name: "", sku: "", sale_price: "49.00", cost_price: "20.00", stock: "10", short_description: "" });
+  const [cjQuery, setCjQuery] = useState("");
+  const [cjProducts, setCjProducts] = useState<SupplierProduct[]>([]);
+  const [cjLoading, setCjLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -46,12 +50,84 @@ export function AdminProductsPage() {
     }
   }
 
+  async function searchCj(event: FormEvent) {
+    event.preventDefault();
+    setError(null);
+    setCjLoading(true);
+    try {
+      setCjProducts(await searchCjProducts(cjQuery));
+    } catch {
+      setError("Nao foi possivel buscar na CJ. Confira CJ_API_KEY e SUPPLIER_PROVIDER=cj no Render backend.");
+    } finally {
+      setCjLoading(false);
+    }
+  }
+
+  async function importProduct(product: SupplierProduct, variant: SupplierProductVariant) {
+    setError(null);
+    try {
+      const cost = Number(variant.cost || variant.price || 0);
+      const sale = Number(variant.price || cost * 2 || 0);
+      const imported = await importCjProduct({
+        supplier_product_id: product.supplier_product_id,
+        name: product.name,
+        sku: product.sku || variant.sku,
+        sale_price: sale,
+        cost_price: cost,
+        stock: variant.stock,
+        supplier_variant_id: variant.supplier_variant_id,
+        supplier_sku: variant.sku,
+        description: product.description,
+        image_url: variant.image_url || product.image_url,
+      });
+      setProducts((items) => [imported, ...items]);
+      setCjProducts((items) => items.filter((item) => item.supplier_product_id !== product.supplier_product_id));
+    } catch {
+      setError("Nao foi possivel importar. O produto pode ja existir ou a variante CJ nao veio com ID valido.");
+    }
+  }
+
   return (
     <div>
-      <PageTitle title="Products" action="New product" onAction={() => setShowForm((value) => !value)} />
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-2xl font-semibold">Products</h2>
+        <div className="flex gap-2">
+          <button className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-semibold" onClick={() => setShowCjImport((value) => !value)}>Import from CJ</button>
+          <button className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white" onClick={() => setShowForm((value) => !value)}>New product</button>
+        </div>
+      </div>
+      {error ? <div className="mb-5 rounded-md bg-red-50 p-3 text-sm text-danger">{error}</div> : null}
+      {showCjImport ? (
+        <section className="mb-5 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <form onSubmit={searchCj} className="flex flex-col gap-3 md:flex-row">
+            <input className="h-10 min-w-0 flex-1 rounded-md border border-slate-200 px-3 text-sm" placeholder="Search CJ products by keyword" value={cjQuery} onChange={(event) => setCjQuery(event.target.value)} required />
+            <button className="rounded-md bg-primary px-4 text-sm font-semibold text-white" disabled={cjLoading}>{cjLoading ? "Searching..." : "Search CJ"}</button>
+          </form>
+          <div className="mt-5 grid gap-3">
+            {cjProducts.map((product) => {
+              const variant = product.variants[0];
+              return (
+                <article key={product.supplier_product_id} className="grid gap-4 rounded-md border border-slate-200 p-4 md:grid-cols-[88px_1fr_auto]">
+                  <div className="h-20 w-20 overflow-hidden rounded-md bg-mist">
+                    {product.image_url ? <img src={product.image_url} alt={product.name} className="h-full w-full object-cover" /> : null}
+                  </div>
+                  <div>
+                    <h3 className="font-semibold">{product.name}</h3>
+                    <p className="mt-1 text-sm text-slate-600">CJ ID: {product.supplier_product_id}</p>
+                    <p className="mt-1 text-sm text-slate-600">Variant: {variant?.supplier_variant_id || "missing"} - {variant?.sku}</p>
+                    <p className="mt-1 text-sm text-slate-600">Cost/price: USD {variant?.cost ?? "0"} / USD {variant?.price ?? "0"} - Stock {variant?.stock ?? 0}</p>
+                  </div>
+                  <button className="h-10 rounded-md bg-primary px-4 text-sm font-semibold text-white disabled:bg-slate-300" disabled={!variant?.supplier_variant_id} onClick={() => variant && importProduct(product, variant)}>
+                    Import
+                  </button>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
       {showForm ? (
         <form onSubmit={submitProduct} className="mb-5 grid gap-3 rounded-lg border border-slate-200 bg-white p-5 shadow-sm md:grid-cols-6">
-          {error ? <div className="rounded-md bg-red-50 p-3 text-sm text-danger md:col-span-6">{error}</div> : null}
           <input className="h-10 rounded-md border border-slate-200 px-3 text-sm md:col-span-2" placeholder="Product name" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required />
           <input className="h-10 rounded-md border border-slate-200 px-3 text-sm" placeholder="SKU" value={form.sku} onChange={(event) => setForm({ ...form, sku: event.target.value })} required />
           <input className="h-10 rounded-md border border-slate-200 px-3 text-sm" placeholder="Sale price" value={form.sale_price} onChange={(event) => setForm({ ...form, sale_price: event.target.value })} required />

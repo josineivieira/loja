@@ -2,7 +2,7 @@ import { api } from "./api";
 import { demoAdmin } from "../data/demoAdmin";
 import type { AdminCustomer, AdminDashboard, Coupon, IntegrationStatus, ShippingMethod, SupplierOrderPayload } from "../types/admin";
 import type { Order } from "../types/checkout";
-import type { Product } from "../types/catalog";
+import type { Product, SupplierProduct } from "../types/catalog";
 
 const demoFallbackEnabled = import.meta.env.VITE_ENABLE_DEMO_FALLBACK !== "false";
 
@@ -67,6 +67,27 @@ export async function createAdminProduct(payload: {
       },
     ],
   });
+  return data;
+}
+
+export async function searchCjProducts(query: string) {
+  const { data } = await api.get<SupplierProduct[]>("/admin/supplier/cj/products", { params: { q: query } });
+  return data;
+}
+
+export async function importCjProduct(payload: {
+  supplier_product_id: string;
+  name: string;
+  sku: string;
+  sale_price: number;
+  cost_price: number;
+  stock: number;
+  supplier_variant_id: string;
+  supplier_sku?: string;
+  description?: string | null;
+  image_url?: string | null;
+}) {
+  const { data } = await api.post<Product>("/admin/supplier/cj/import", payload);
   return data;
 }
 

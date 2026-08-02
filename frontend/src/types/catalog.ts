@@ -1,6 +1,7 @@
 export type ProductVariant = {
   id: string;
   sku: string;
+  supplier_variant_id?: string | null;
   price: string;
   cost: string;
   stock: number;
@@ -15,6 +16,9 @@ export type Product = {
   short_description?: string | null;
   description?: string | null;
   sku: string;
+  supplier_sku?: string | null;
+  supplier_product_id?: string | null;
+  cost_price?: string;
   sale_price: string;
   compare_at_price?: string | null;
   currency: string;
@@ -24,6 +28,25 @@ export type Product = {
   is_bestseller: boolean;
   variants: ProductVariant[];
   images: ProductImage[];
+};
+
+export type SupplierProductVariant = {
+  supplier_variant_id: string;
+  sku: string;
+  name?: string | null;
+  price: string;
+  cost: string;
+  stock: number;
+  image_url?: string | null;
+};
+
+export type SupplierProduct = {
+  supplier_product_id: string;
+  name: string;
+  sku: string;
+  description?: string | null;
+  image_url?: string | null;
+  variants: SupplierProductVariant[];
 };
 
 export type ProductImage = {
