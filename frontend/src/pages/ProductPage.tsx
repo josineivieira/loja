@@ -87,6 +87,11 @@ export function ProductPage() {
     });
   }
 
+  function selectVariant(variant: ProductVariant) {
+    setSelectedVariant(variant);
+    if (variant.image_url) setActiveImage(variant.image_url);
+  }
+
   useEffect(() => {
     const digits = deliveryForm.postal_code.replace(/\D/g, "");
     if (deliveryForm.country.toUpperCase() !== "BR" || digits.length !== 8) return;
@@ -142,7 +147,7 @@ export function ProductPage() {
         }
       }
       if (available.length) {
-        setSelectedVariant(available[0].variant);
+        selectVariant(available[0].variant);
         setDeliveryQuotes(available[0].quotes);
         setDeliveryVariantIds(available.map((item) => item.variant.id));
         setDeliveryStatus(t("selectedVariantUnavailable", language));
@@ -209,11 +214,16 @@ export function ProductPage() {
             </div>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               {visibleVariants.map((variant, index) => (
-                <button key={variant.id} className={`rounded-md border p-3 text-left text-sm ${selectedVariant?.id === variant.id ? "border-primary bg-blue-50" : "border-slate-200"}`} onClick={() => setSelectedVariant(variant)}>
-                  <span className="block font-semibold">{variantDisplayName(index, language)}</span>
-                  <span className="mt-1 block text-xs text-slate-500">{variant.sku}</span>
-                  <span className="mt-1 block text-slate-600">{variant.stock > 0 ? `${variant.stock} ${t("inStockCount", language)}` : t("outOfStock", language)}</span>
-                  {deliveryVariantIds.includes(variant.id) ? <span className="mt-1 block text-xs font-semibold text-emerald-700">Entrega nesse CEP</span> : null}
+                <button key={variant.id} className={`grid grid-cols-[48px_1fr] gap-3 rounded-md border p-3 text-left text-sm ${selectedVariant?.id === variant.id ? "border-primary bg-blue-50" : "border-slate-200"}`} onClick={() => selectVariant(variant)}>
+                  <span className="h-12 w-12 overflow-hidden rounded-md bg-mist">
+                    {variant.image_url ? <img src={variant.image_url} alt="" className="h-full w-full object-cover" /> : null}
+                  </span>
+                  <span>
+                    <span className="block font-semibold">{variantDisplayName(index, language)}</span>
+                    <span className="mt-1 block text-xs text-slate-500">{variant.sku}</span>
+                    <span className="mt-1 block text-slate-600">{variant.stock > 0 ? `${variant.stock} ${t("inStockCount", language)}` : t("outOfStock", language)}</span>
+                    {deliveryVariantIds.includes(variant.id) ? <span className="mt-1 block text-xs font-semibold text-emerald-700">Entrega nesse CEP</span> : null}
+                  </span>
                 </button>
               ))}
             </div>
