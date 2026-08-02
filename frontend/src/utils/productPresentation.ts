@@ -93,6 +93,14 @@ const titleRules: Array<{ match: RegExp; title: Record<Language, string> }> = [
       es: "Pulsera repelente de mosquitos",
     },
   },
+  {
+    match: /spray\s+water\s+bottle|water\s+cup|drinkware|travel\s+bottle|fitness\s+water/i,
+    title: {
+      en: "Portable spray water bottle",
+      pt: "Garrafa spray portatil para agua",
+      es: "Botella de agua portatil con spray",
+    },
+  },
 ];
 
 const descriptionRules: Array<{ match: RegExp; description: Record<Language, string> }> = [
@@ -161,6 +169,29 @@ const descriptionRules: Array<{ match: RegExp; description: Record<Language, str
       es: "Ventilador portatil de cuello con diseno manos libres para dias calidos, traslados y uso exterior. Ligero, recargable y practico.",
     },
   },
+  {
+    match: /spray\s+water\s+bottle|water\s+cup|drinkware|travel\s+bottle|fitness\s+water/i,
+    description: {
+      en: "Portable water bottle with spray function for sports, travel and outdoor use. Practical for keeping drinks nearby and refreshing during warm days.",
+      pt: "Garrafa portatil para agua com funcao spray, indicada para esportes, viagens e uso ao ar livre. Pratica para manter a hidratacao e refrescar em dias quentes.",
+      es: "Botella portatil de agua con funcion spray para deporte, viajes y uso exterior. Practica para hidratarse y refrescarse en dias calidos.",
+    },
+  },
+];
+
+const ptKeywordTitles: Array<[RegExp, string]> = [
+  [/water\s+bottle|travel\s+bottle|drinkware|water\s+cup/i, "Garrafa de agua portatil"],
+  [/spray/i, "Garrafa spray portatil"],
+  [/fitness|sport/i, "Garrafa esportiva"],
+  [/kitchen\s+gadgets?/i, "Acessorio util para cozinha"],
+  [/outdoor/i, "Acessorio para uso externo"],
+  [/bottle/i, "Garrafa portatil"],
+  [/cup/i, "Copo portatil"],
+  [/charger|charging/i, "Carregador"],
+  [/vacuum/i, "Aspirador portatil"],
+  [/dress/i, "Vestido feminino"],
+  [/shirt/i, "Camisa"],
+  [/shoes?|sneaker|flat/i, "Calcado casual"],
 ];
 
 const phraseTranslations: Record<Language, Array<[RegExp, string]>> = {
@@ -239,6 +270,11 @@ export function presentSupplierName(name?: string | null, description?: string |
   if (rule) return rule.title[language];
   const cleaned = cleanSupplierText(name);
   if (!cleaned || containsCjk(cleaned)) return genericDescription[language].replace(/^Produto importado do catalogo do fornecedor/i, "Produto importado").replace(/^Product imported from the supplier catalog/i, "Imported product").replace(/^Producto importado del catalogo del proveedor/i, "Producto importado");
+  if (language === "pt") {
+    const keywordTitle = ptKeywordTitles.find(([pattern]) => pattern.test(source))?.[1];
+    if (keywordTitle) return keywordTitle;
+    if (/[a-z]{4,}\s+[a-z]{4,}/i.test(cleaned)) return "Produto importado selecionado";
+  }
   return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
 }
 

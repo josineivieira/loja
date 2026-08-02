@@ -15,7 +15,6 @@ import {
 import type { Product, SupplierProduct, SupplierShippingEstimate } from "../../types/catalog";
 import { formatMoney } from "../../utils/currency";
 import { presentSupplierDescription, presentSupplierName } from "../../utils/productPresentation";
-import { usePreferencesStore } from "../../stores/preferencesStore";
 import { AxiosError } from "axios";
 
 type ImportTab = "product" | "variants" | "media" | "description" | "shipping";
@@ -95,7 +94,6 @@ function cleanVariantOptions(options: Record<string, string>) {
 }
 
 export function AdminProductsPage() {
-  const language = usePreferencesStore((state) => state.language);
   const [products, setProducts] = useState<Product[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [showCjImport, setShowCjImport] = useState(false);
@@ -168,8 +166,8 @@ export function AdminProductsPage() {
       const displayNameSource = hasCjk(fullProduct.name) && !hasCjk(product.name) ? product.name : fullProduct.name;
       const displayDescriptionSource = fullProduct.description || product.description;
       const images = imageList(fullProduct);
-      const cleanName = presentSupplierName(displayNameSource, displayDescriptionSource, language);
-      const cleanDescription = presentSupplierDescription(displayNameSource, displayDescriptionSource, language);
+      const cleanName = presentSupplierName(displayNameSource, displayDescriptionSource, "pt");
+      const cleanDescription = presentSupplierDescription(displayNameSource, displayDescriptionSource, "pt");
       const variants = fullProduct.variants
         .filter((variant) => variant.supplier_variant_id)
         .slice(0, 40)
@@ -365,7 +363,7 @@ export function AdminProductsPage() {
                     {product.image_url ? <img src={product.image_url} alt={product.name} className="h-full w-full object-cover" /> : null}
                   </div>
                   <div>
-                    <h3 className="font-semibold">{presentSupplierName(product.name, product.description, language)}</h3>
+                    <h3 className="font-semibold">{presentSupplierName(product.name, product.description, "pt")}</h3>
                     <p className="mt-1 text-sm text-slate-600">ID CJ: {product.supplier_product_id}</p>
                     <p className="mt-1 text-sm text-slate-600">Primeira variante: {variant?.supplier_variant_id || "sem ID"} - {variant?.sku}</p>
                     <p className="mt-1 text-sm text-slate-600">Custo CJ: USD {variant?.cost ?? "0"} - Estoque {variant?.stock ?? 0}</p>
