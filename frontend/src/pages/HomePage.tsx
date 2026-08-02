@@ -1,4 +1,4 @@
-import { ArrowRight, BadgeDollarSign, ShieldCheck, Sparkles, Truck } from "lucide-react";
+import { ArrowRight, ShieldCheck, Truck, Zap } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 
@@ -9,11 +9,48 @@ import { usePreferencesStore } from "../stores/preferencesStore";
 import type { Category, Product } from "../types/catalog";
 import { t } from "../utils/i18n";
 
+const spotlightCopy = {
+  en: {
+    title: "Storefront designed to feel premium from the first scroll to the last click.",
+    text: "A sharper ecommerce direction with cleaner hierarchy, more trust signals and a more deliberate product discovery experience.",
+    heroAction: "Explore catalog",
+    secondaryAction: "See how checkout flows",
+    editLine: "A more refined shopping experience",
+    metrics: ["high-trust checkout", "clear product discovery", "supplier-ready structure"],
+    selection: "Curated storefront sections",
+    collectionText: "Present collections with the discipline and visual confidence of large retail brands.",
+    journal: "Designed for brands that want more perceived value.",
+  },
+  pt: {
+    title: "Uma vitrine desenhada para parecer premium do primeiro scroll ao último clique.",
+    text: "Direção visual mais sofisticada, hierarquia mais limpa, mais sinais de confiança e uma navegação de produto muito mais madura.",
+    heroAction: "Explorar catálogo",
+    secondaryAction: "Ver fluxo do checkout",
+    editLine: "Uma experiência de compra mais refinada",
+    metrics: ["checkout com mais confiança", "descoberta de produtos mais clara", "estrutura pronta para fornecedor"],
+    selection: "Seções pensadas para vender",
+    collectionText: "Apresente coleções com a disciplina visual e a presença das grandes marcas do varejo.",
+    journal: "Desenhado para lojas que querem aumentar valor percebido.",
+  },
+  es: {
+    title: "Una vitrina pensada para sentirse premium desde el primer scroll hasta el último clic.",
+    text: "Dirección visual más sofisticada, jerarquía más limpia, más señales de confianza y una experiencia de descubrimiento mucho más madura.",
+    heroAction: "Explorar catálogo",
+    secondaryAction: "Ver flujo del checkout",
+    editLine: "Una experiencia de compra más refinada",
+    metrics: ["checkout de alta confianza", "descubrimiento más claro", "estructura lista para proveedor"],
+    selection: "Secciones pensadas para vender",
+    collectionText: "Presenta colecciones con la disciplina visual y la presencia de las grandes marcas del retail.",
+    journal: "Diseñado para tiendas que quieren elevar el valor percibido.",
+  },
+} as const;
+
 export function HomePage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [bestSellers, setBestSellers] = useState<Product[]>([]);
   const [newArrivals, setNewArrivals] = useState<Product[]>([]);
   const language = usePreferencesStore((state) => state.language);
+  const copy = spotlightCopy[language];
 
   useEffect(() => {
     Promise.all([
@@ -27,182 +64,170 @@ export function HomePage() {
     });
   }, []);
 
-  const heroProduct = bestSellers[0] ?? newArrivals[0];
+  const heroProduct = useMemo(() => bestSellers[0] ?? newArrivals[0], [bestSellers, newArrivals]);
   const heroImage = heroProduct?.images.find((image) => image.is_primary)?.url ?? heroProduct?.images[0]?.url;
-  const heroTitle = useMemo(
-    () =>
-      language === "pt"
-        ? "Uma vitrine premium, pronta para escalar sem mexer nas integrações"
-        : language === "es"
-          ? "Una vitrina premium lista para escalar sin tocar integraciones"
-          : "A premium storefront built to scale without touching integrations",
-    [language],
-  );
-
-  const trustCards = [
-    {
-      icon: Truck,
-      title: t("internationalShipping", language),
-      description: t("calculatedAtCheckout", language),
-    },
-    {
-      icon: ShieldCheck,
-      title: t("securePayments", language),
-      description: t("stripeCheckout", language),
-    },
-    {
-      icon: BadgeDollarSign,
-      title: t("supplierReady", language),
-      description: t("cjWorkflow", language),
-    },
-  ];
 
   return (
-    <div className="pb-8">
+    <div>
       <Seo
-        title="Nexora | Smart Gadgets. Smarter Living."
-        description="Premium international smart gadgets with secure checkout and global shipping."
+        title="Nexora | Premium commerce storefront"
+        description="Premium ecommerce storefront with secure checkout, stronger product presentation and a more polished purchasing journey."
         jsonLd={{ "@context": "https://schema.org", "@type": "Organization", name: "Nexora", url: window.location.origin }}
       />
 
-      <section className="store-shell pt-6 sm:pt-8">
-        <div className="surface-card relative overflow-hidden px-6 py-8 sm:px-8 sm:py-12 lg:px-12 lg:py-14">
-          <div className="absolute inset-y-0 right-0 hidden w-1/2 bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.12),transparent_62%)] lg:block" />
-          <div className="relative grid items-center gap-10 lg:grid-cols-[1.1fr_0.9fr]">
+      <section className="section-space pb-6">
+        <div className="shell grid gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-stretch">
+          <div className="panel surface-grid flex min-h-[620px] flex-col justify-between overflow-hidden p-8 md:p-12">
             <div>
-              <span className="pill-chip">
-                <Sparkles className="mr-2 h-3.5 w-3.5 text-primary" />
-                {t("heroEyebrow", language)}
-              </span>
-              <h1 className="mt-5 max-w-4xl text-4xl font-semibold tracking-tight text-slate-950 sm:text-5xl lg:text-6xl">{heroTitle}</h1>
-              <p className="mt-5 max-w-2xl text-base leading-8 text-slate-600 sm:text-lg">{t("heroCopy", language)}</p>
+              <p className="eyebrow">{copy.editLine}</p>
+              <h1 className="mt-5 max-w-3xl text-4xl font-semibold tracking-[-0.05em] text-slate-950 md:text-6xl">
+                {copy.title}
+              </h1>
+              <p className="mt-6 max-w-xl text-base leading-8 text-slate-600 md:text-lg">{copy.text}</p>
+            </div>
 
-              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-                <Link to="/catalog" className="primary-button">
-                  {t("shopNow", language)}
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
-                <Link to="/checkout" className="secondary-button">
-                  {language === "pt" ? "Ver checkout" : language === "es" ? "Ver checkout" : "See checkout"}
-                </Link>
-              </div>
-
-              <div className="mt-8 grid gap-3 sm:grid-cols-3">
-                {[
-                  [language === "pt" ? "Layout premium" : language === "es" ? "Layout premium" : "Premium layout", language === "pt" ? "Mais foco em conversão" : language === "es" ? "Mas foco en conversion" : "Higher conversion focus"],
-                  [language === "pt" ? "Checkout confiável" : language === "es" ? "Checkout confiable" : "Reliable checkout", language === "pt" ? "Fluxo preservado" : language === "es" ? "Flujo preservado" : "Flow preserved"],
-                  [language === "pt" ? "Escala visual" : language === "es" ? "Escala visual" : "Visual scale", language === "pt" ? "Cara de loja grande" : language === "es" ? "Aspecto de gran tienda" : "Large-store feeling"],
-                ].map(([title, description]) => (
-                  <div key={title} className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-4">
-                    <p className="text-sm font-semibold text-slate-950">{title}</p>
-                    <p className="mt-1 text-sm text-slate-600">{description}</p>
+            <div className="mt-10 space-y-8">
+              <div className="grid gap-4 sm:grid-cols-3">
+                {copy.metrics.map((metric) => (
+                  <div key={metric} className="border border-slate-300 bg-white/80 p-4">
+                    <p className="text-sm font-medium leading-6 text-slate-700">{metric}</p>
                   </div>
                 ))}
               </div>
-            </div>
 
-            <div className="relative">
-              <div className="absolute -left-4 top-10 hidden rounded-2xl border border-white/80 bg-white/90 px-4 py-3 shadow-lg lg:block">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Storefront</p>
-                <p className="mt-1 text-sm font-semibold text-slate-950">UI aprimorada sem tocar APIs</p>
+              <div className="flex flex-wrap gap-3">
+                <Link to="/catalog" className="btn-primary">
+                  {t("shopNow", language) === "shopNow" ? copy.heroAction : t("shopNow", language)}
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+                <Link to="/checkout" className="btn-secondary">
+                  {copy.secondaryAction}
+                </Link>
               </div>
-              <div className="overflow-hidden rounded-[32px] border border-slate-200 bg-gradient-to-br from-slate-950 via-slate-900 to-primary p-4 shadow-[0_30px_80px_-40px_rgba(15,23,42,0.9)] sm:p-5">
-                <div className="overflow-hidden rounded-[26px] bg-white">
+            </div>
+          </div>
+
+          <div className="grid gap-6">
+            <div className="panel overflow-hidden bg-[#111827] p-6 text-white md:p-8">
+              <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-5">
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.26em] text-slate-300">Hero product</p>
+                  <h2 className="mt-3 text-2xl font-semibold tracking-[-0.03em]">
+                    {heroProduct?.name ?? "Nexora Collection"}
+                  </h2>
+                </div>
+                <span className="badge-subtle border-white/20 bg-white/10 text-white">Premium edit</span>
+              </div>
+
+              <div className="grid gap-6 pt-6 md:grid-cols-[1fr_220px] md:items-center">
+                <div>
+                  <p className="text-sm leading-7 text-slate-300">
+                    {heroProduct?.description ?? t("heroCopy", language)}
+                  </p>
+                  <div className="mt-6 grid gap-3 sm:grid-cols-3 md:grid-cols-1 xl:grid-cols-3">
+                    {[
+                      { icon: ShieldCheck, title: t("securePayments", language), copy: t("stripeCheckout", language) },
+                      { icon: Truck, title: t("internationalShipping", language), copy: t("calculatedAtCheckout", language) },
+                      { icon: Zap, title: t("supplierReady", language), copy: t("cjWorkflow", language) },
+                    ].map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <div key={item.title} className="border border-white/10 bg-white/5 p-4">
+                          <Icon className="h-5 w-5 text-blue-200" />
+                          <p className="mt-3 text-sm font-semibold">{item.title}</p>
+                          <p className="mt-2 text-xs leading-6 text-slate-300">{item.copy}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="border border-white/10 bg-white">
                   {heroImage ? (
-                    <img className="aspect-[4/3] w-full object-cover" src={heroImage} alt={heroProduct?.name ?? "Nexora"} />
+                    <img className="aspect-[4/5] h-full w-full object-cover" src={heroImage} alt={heroProduct?.name ?? "Nexora"} />
                   ) : (
-                    <div className="grid aspect-[4/3] place-items-center bg-gradient-to-br from-slate-50 via-white to-blue-50 p-8 text-center">
-                      <div>
-                        <p className="text-sm font-semibold text-primary">Nexora</p>
-                        <p className="mt-2 text-2xl font-semibold text-slate-950">Smart commerce ready</p>
-                        <p className="mt-2 text-sm text-slate-600">Importe produtos CJ para destacar aqui automaticamente.</p>
-                      </div>
-                    </div>
+                    <div className="surface-grid aspect-[4/5] bg-[#f6f3ee]" />
                   )}
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      </section>
 
-      <section className="store-shell py-8 sm:py-10">
-        <div className="grid gap-4 md:grid-cols-3">
-          {trustCards.map(({ icon: Icon, title, description }) => (
-            <div key={title} className="soft-card rounded-[24px] px-5 py-5">
-              <div className="inline-flex rounded-2xl bg-blue-50 p-3 text-primary">
-                <Icon className="h-5 w-5" />
+            <div className="grid gap-6 md:grid-cols-2">
+              <div className="panel-muted p-6 md:p-7">
+                <p className="eyebrow">{copy.selection}</p>
+                <p className="mt-4 text-xl font-semibold tracking-[-0.03em] text-slate-950">{copy.collectionText}</p>
               </div>
-              <h2 className="mt-4 text-lg font-semibold tracking-tight text-slate-950">{title}</h2>
-              <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
+              <div className="panel p-6 md:p-7">
+                <p className="eyebrow">Nexora note</p>
+                <p className="mt-4 text-xl font-semibold tracking-[-0.03em] text-slate-950">{copy.journal}</p>
+              </div>
             </div>
-          ))}
+          </div>
         </div>
       </section>
 
-      <section className="store-shell py-8 sm:py-10">
-        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h2 className="section-title">{t("featuredCategories", language)}</h2>
-            <p className="section-copy mt-2">{t("browseCollections", language)}</p>
-          </div>
-          <Link to="/catalog" className="text-sm font-semibold text-primary">
-            {t("viewAll", language)}
-          </Link>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-3">
-          {categories.slice(0, 3).map((category, index) => (
-            <Link
-              key={category.id}
-              to={`/category/${category.slug}`}
-              className="group relative overflow-hidden rounded-[28px] border border-slate-200 bg-white px-5 py-6 shadow-sm transition hover:-translate-y-1 hover:shadow-xl"
-            >
-              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-sky-400 to-cyan-300" />
-              <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">0{index + 1}</span>
-              <h3 className="mt-4 text-xl font-semibold tracking-tight text-slate-950">{category.name}</h3>
-              <p className="mt-3 text-sm leading-6 text-slate-600">{category.description}</p>
-              <span className="mt-5 inline-flex items-center text-sm font-semibold text-primary">
-                Explorar
-                <ArrowRight className="ml-2 h-4 w-4 transition group-hover:translate-x-1" />
-              </span>
+      <section className="section-space pt-4">
+        <div className="shell">
+          <div className="mb-8 flex items-end justify-between gap-5">
+            <div>
+              <p className="kicker-line">{t("featuredCategories", language)}</p>
+              <h2 className="mt-4 headline-md">{t("featuredCategories", language)}</h2>
+            </div>
+            <Link to="/catalog" className="text-sm font-semibold text-slate-700 transition hover:text-slate-950">
+              {t("viewAll", language)}
             </Link>
-          ))}
+          </div>
+
+          <div className="grid gap-5 md:grid-cols-3">
+            {categories.slice(0, 3).map((category, index) => (
+              <Link key={category.id} to={`/category/${category.slug}`} className="panel group overflow-hidden">
+                <div className="border-b border-slate-200 p-6 md:p-7">
+                  <span className="text-[11px] uppercase tracking-[0.24em] text-slate-400">0{index + 1}</span>
+                  <h3 className="mt-4 text-2xl font-semibold tracking-[-0.03em] text-slate-950 transition group-hover:translate-x-1">{category.name}</h3>
+                </div>
+                <div className="bg-[#f8f6f1] p-6 md:p-7">
+                  <p className="text-sm leading-7 text-slate-600">{category.description || t("browseCollections", language)}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
         </div>
       </section>
 
       {bestSellers.length > 0 ? (
-        <section className="store-shell py-8 sm:py-10">
-          <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <h2 className="section-title">{t("bestSellers", language)}</h2>
-              <p className="section-copy mt-2">Produtos com visual premium e CTA mais forte para compra rápida.</p>
+        <section className="section-space pt-6">
+          <div className="shell">
+            <div className="mb-8 flex items-end justify-between gap-5">
+              <div>
+                <p className="kicker-line">Nexora selection</p>
+                <h2 className="mt-4 headline-md">{t("bestSellers", language)}</h2>
+              </div>
+              <Link to="/catalog?sort=bestsellers" className="text-sm font-semibold text-slate-700 transition hover:text-slate-950">
+                {t("viewAll", language)}
+              </Link>
             </div>
-            <Link to="/catalog?is_bestseller=true" className="text-sm font-semibold text-primary">
-              {t("viewAll", language)}
-            </Link>
-          </div>
-          <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
-            {bestSellers.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+              {bestSellers.map((product) => (
+                <ProductCard key={product.id} product={product} />
+              ))}
+            </div>
           </div>
         </section>
       ) : null}
 
       {newArrivals.length > 0 ? (
-        <section className="store-shell py-8 sm:py-10">
-          <div className="surface-card px-5 py-7 sm:px-7 sm:py-8">
-            <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <section className="section-space bg-[#ece7de]">
+          <div className="shell">
+            <div className="mb-8 flex items-end justify-between gap-5">
               <div>
-                <h2 className="section-title">{t("newArrivals", language)}</h2>
-                <p className="section-copy mt-2">Novos produtos com apresentação mais forte para primeira impressão e retenção.</p>
+                <p className="kicker-line">Latest arrivals</p>
+                <h2 className="mt-4 headline-md">{t("newArrivals", language)}</h2>
               </div>
-              <Link to="/catalog?is_new=true" className="text-sm font-semibold text-primary">
+              <Link to="/catalog?is_new=true" className="text-sm font-semibold text-slate-700 transition hover:text-slate-950">
                 {t("viewAll", language)}
               </Link>
             </div>
-            <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
               {newArrivals.map((product) => (
                 <ProductCard key={product.id} product={product} />
               ))}

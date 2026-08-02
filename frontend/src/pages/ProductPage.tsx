@@ -1,4 +1,4 @@
-import { Heart, ShieldCheck, ShoppingBag, Truck } from "lucide-react";
+import { Check, Heart, ShieldCheck, ShoppingBag, Truck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
@@ -126,7 +126,7 @@ export function ProductPage() {
           setDeliveryForm((value) => ({ ...value, state: data.uf ?? value.state, city: data.localidade ?? value.city }));
         }
       } catch {
-        // Delivery can still be checked manually if ViaCEP is unavailable.
+        // fallback manual
       }
     }, 350);
     return () => window.clearTimeout(timeout);
@@ -152,7 +152,7 @@ export function ProductPage() {
       setDeliveryVariantIds([selectedVariant.id]);
       setDeliveryStatus(quotes.length ? t("deliveryAvailable", language) : t("deliveryUnavailable", language));
     } catch (error) {
-      const available = [];
+      const available = [] as Array<{ variant: ProductVariant; quotes: ShippingQuote[] }>;
       for (const variant of product.variants.filter((item) => item.id !== selectedVariant.id)) {
         try {
           const quotes = await estimateShipping({
@@ -166,7 +166,7 @@ export function ProductPage() {
           });
           if (quotes.length) available.push({ variant, quotes });
         } catch {
-          // Some supplier variants can be unavailable for the destination while others are valid.
+          // ignore per-variant errors
         }
       }
       if (available.length) {
@@ -182,11 +182,16 @@ export function ProductPage() {
     }
   }
 
-  if (loading) return <div className="mx-auto max-w-7xl px-4 py-12 text-slate-600">{language === "pt" ? "Carregando produto..." : language === "es" ? "Cargando producto..." : "Loading product..."}</div>;
-  if (error || !product) return <div className="mx-auto max-w-7xl px-4 py-12 text-danger">{error}</div>;
+  if (loading) {
+    return <div className="shell py-20 text-sm text-slate-600">{language === "pt" ? "Carregando produto..." : language === "es" ? "Cargando producto..." : "Loading product..."}</div>;
+  }
+
+  if (error || !product) {
+    return <div className="shell py-20 text-sm text-danger">{error}</div>;
+  }
 
   return (
-    <section className="mx-auto max-w-7xl px-4 py-8">
+    <section className="section-space">
       <Seo
         title={`${displayName} | Nexora`}
         description={displayDescription}
@@ -198,219 +203,264 @@ export function ProductPage() {
           sku: product.sku,
           description: displayDescription,
           image: activeImage ? [activeImage] : [],
-          offers: { "@type": "Offer", price: displayPrice, priceCurrency: product.currency, availability: maxStock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock" },
+          offers: {
+            "@type": "Offer",
+            price: displayPrice,
+            priceCurrency: product.currency,
+            availability: maxStock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+          },
         }}
       />
-      <div className="grid gap-10 lg:grid-cols-[1fr_0.9fr]">
-        <div>
-          <div className="aspect-square overflow-hidden rounded-lg bg-mist">
-            {activeImage ? <img className="h-full w-full object-cover" src={activeImage} alt={displayName} /> : <div className="grid h-full place-items-center text-slate-500">Nexora</div>}
-          </div>
-          {product.images.length > 1 ? (
-            <div className="mt-4 grid grid-cols-5 gap-3">
-              {product.images.map((image) => (
-                <button key={image.id} className={`aspect-square overflow-hidden rounded-md border ${activeImage === image.url ? "border-primary" : "border-slate-200"}`} onClick={() => setActiveImage(image.url)}>
-                  <img className="h-full w-full object-cover" src={image.url} alt={image.alt_text ?? displayName} />
-                </button>
-              ))}
-            </div>
-          ) : null}
-        </div>
 
-        <div>
-          <p className="text-sm font-semibold uppercase text-primary">{product.sku}</p>
-          <h1 className="mt-3 text-3xl font-semibold leading-tight md:text-4xl">{displayName}</h1>
-          <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600 md:text-lg">{displayDescription}</p>
-          <div className="mt-6 flex items-end gap-3">
-            <p className="text-3xl font-semibold">{formatMoney(displayPrice, product.currency, displayCurrency)}</p>
-            {compareAt ? <p className="pb-1 text-slate-500 line-through">{formatMoney(compareAt, product.currency, displayCurrency)}</p> : null}
-          </div>
-
-          <div className="mt-8">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-semibold">{t("model", language)}</p>
-              {product.variants.length > 8 ? (
-                <button className="text-sm font-semibold text-primary" onClick={() => setShowAllVariants((value) => !value)}>
-                  {showAllVariants
-                    ? (language === "pt" ? "Ver menos" : language === "es" ? "Ver menos" : "Show less")
-                    : `${optionGroups.length ? (language === "pt" ? "Ver combinacoes" : language === "es" ? "Ver combinaciones" : "Show combinations") : language === "pt" ? "Ver todas" : language === "es" ? "Ver todas" : "Show all"} (${product.variants.length})`}
-                </button>
-              ) : null}
+      <div className="shell">
+        <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-start">
+          <div className="space-y-4">
+            <div className="panel overflow-hidden bg-[#f7f4ee]">
+              {activeImage ? <img className="aspect-[4/4.8] h-full w-full object-cover" src={activeImage} alt={displayName} /> : <div className="aspect-[4/4.8] surface-grid" />}
             </div>
-            {optionGroups.length ? (
-              <div className="mt-3 space-y-4">
-                {optionGroups.map(([name, values]) => {
-                  const selectedIndex = selectedVariant ? product.variants.indexOf(selectedVariant) : 0;
-                  const selectedOptions = selectedVariant ? variantDisplayOptions(product, selectedVariant, Math.max(0, selectedIndex), language) : {};
-                  return (
-                    <div key={name}>
-                      <p className="text-sm font-semibold">{name}</p>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {values.map((value) => {
-                          const active = selectedOptions[name] === value;
-                          return (
-                            <button
-                              key={value}
-                              type="button"
-                              className={`min-w-14 rounded-md border px-4 py-2 text-sm font-semibold ${active ? "border-primary bg-blue-50 text-primary" : "border-slate-200 hover:bg-mist"}`}
-                              onClick={() => selectOption(name, value)}
-                            >
-                              {value}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-                {selectedVariant ? (
-                  <div className="rounded-md bg-mist p-3 text-sm text-slate-600">
-                    <span className="font-semibold text-ink">{language === "pt" ? "Selecionado" : language === "es" ? "Seleccionado" : "Selected"}:</span>{" "}
-                    {variantOptionSummary(product, selectedVariant, Math.max(0, product.variants.indexOf(selectedVariant)), language).title}
-                    <span className="ml-2 text-xs">{selectedVariant.sku}</span>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-            {!optionGroups.length || showAllVariants ? <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              {visibleVariants.map((variant) => {
-                const option = variantOptionSummary(product, variant, product.variants.indexOf(variant), language);
-                return (
-                  <button key={variant.id} className={`grid grid-cols-[48px_1fr] gap-3 rounded-md border p-3 text-left text-sm ${selectedVariant?.id === variant.id ? "border-primary bg-blue-50" : "border-slate-200"}`} onClick={() => selectVariant(variant)}>
-                    <span className="h-12 w-12 overflow-hidden rounded-md bg-mist">
-                      {variant.image_url ? <img src={variant.image_url} alt="" className="h-full w-full object-cover" /> : null}
-                    </span>
-                    <span>
-                      <span className="block font-semibold">{option.title}</span>
-                      <span className="mt-1 block text-xs text-slate-500">{option.detail}</span>
-                      <span className="mt-1 block text-xs text-slate-500">{variant.sku}</span>
-                      <span className="mt-1 block text-slate-600">{variant.stock > 0 ? `${variant.stock} ${t("inStockCount", language)}` : t("outOfStock", language)}</span>
-                      {deliveryVariantIds.includes(variant.id) ? <span className="mt-1 block text-xs font-semibold text-emerald-700">Entrega nesse CEP</span> : null}
-                    </span>
+            {product.images.length > 1 ? (
+              <div className="grid grid-cols-5 gap-3">
+                {product.images.map((image) => (
+                  <button
+                    key={image.id}
+                    className={`overflow-hidden border bg-white ${activeImage === image.url ? "border-slate-950" : "border-slate-200"}`}
+                    onClick={() => setActiveImage(image.url)}
+                  >
+                    <img className="aspect-square h-full w-full object-cover" src={image.url} alt={image.alt_text ?? displayName} />
                   </button>
-                );
-              })}
-            </div> : null}
-            {product.variants.some((variant) => !variant.selected_options || Object.keys(variant.selected_options).length === 0) ? (
-              <p className="mt-3 text-xs leading-5 text-slate-500">
-                {language === "pt"
-                  ? "Algumas variantes antigas ainda nao vieram com cor e tamanho do fornecedor. Para pedidos novos, importe pela CJ novamente ou edite no admin para salvar as opcoes reais."
-                  : language === "es"
-                    ? "Algunas variantes antiguas aun no tienen color y talla del proveedor. Para nuevos productos, importa desde CJ nuevamente o edita en admin."
-                    : "Some older variants do not have supplier color and size saved yet. For new products, import from CJ again or edit them in admin."}
-              </p>
-            ) : null}
-          </div>
-
-          <div className="mt-8 flex flex-wrap items-center gap-3">
-            <QuantityStepper value={quantity} max={Math.max(1, maxStock)} onChange={setQuantity} />
-            <button className="inline-flex h-10 items-center gap-2 rounded-md bg-primary px-5 text-sm font-semibold text-white hover:bg-primaryDark disabled:cursor-not-allowed disabled:bg-slate-300" disabled={!canBuy} onClick={handleAddToCart}>
-              <ShoppingBag className="h-4 w-4" />
-              {t("addToCart", language)}
-            </button>
-            <button className="inline-flex h-10 items-center gap-2 rounded-md border border-slate-200 px-4 text-sm font-semibold hover:bg-mist" onClick={handleFavorite}>
-              <Heart className="h-4 w-4" />
-              {hasFavorite(product.id) ? t("saved", language) : t("favorite", language)}
-            </button>
-          </div>
-          {!canBuy ? <p className="mt-3 text-sm text-danger">{language === "pt" ? "Selecione uma opcao disponivel antes de adicionar ao carrinho." : language === "es" ? "Selecciona una opcion disponible antes de anadir al carrito." : "Select an available option before adding this product to the cart."}</p> : null}
-
-          <section className="mt-8 rounded-lg border border-slate-200 p-4">
-            <div className="flex items-center gap-2">
-              <Truck className="h-5 w-5 text-primary" />
-              <h2 className="font-semibold">{t("checkDelivery", language)}</h2>
-            </div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-[88px_1fr_1fr_1fr_auto]">
-              <input className="h-10 rounded-md border border-slate-200 px-3 text-sm" placeholder={t("country", language)} value={deliveryForm.country} onChange={(event) => setDeliveryForm({ ...deliveryForm, country: event.target.value.toUpperCase() })} maxLength={2} />
-              <input className="h-10 rounded-md border border-slate-200 px-3 text-sm" placeholder={t("postalCode", language)} value={deliveryForm.postal_code} onChange={(event) => setDeliveryForm({ ...deliveryForm, postal_code: event.target.value })} />
-              <input className="h-10 rounded-md border border-slate-200 px-3 text-sm" placeholder={t("state", language)} value={deliveryForm.state} onChange={(event) => setDeliveryForm({ ...deliveryForm, state: event.target.value })} />
-              <input className="h-10 rounded-md border border-slate-200 px-3 text-sm" placeholder={t("city", language)} value={deliveryForm.city} onChange={(event) => setDeliveryForm({ ...deliveryForm, city: event.target.value })} />
-              <button className="rounded-md bg-primary px-4 text-sm font-semibold text-white disabled:bg-slate-300" disabled={checkingDelivery || !selectedVariant || !deliveryForm.postal_code || !deliveryForm.state || !deliveryForm.city} onClick={checkDelivery}>
-                {checkingDelivery ? (language === "pt" ? "Verificando..." : language === "es" ? "Verificando..." : "Checking...") : (language === "pt" ? "Verificar" : language === "es" ? "Verificar" : "Check")}
-              </button>
-            </div>
-            {deliveryStatus ? <p className={`mt-3 text-sm ${deliveryQuotes.length ? "text-emerald-700" : "text-danger"}`}>{deliveryStatus}</p> : null}
-            {deliveryQuotes.length ? (
-              <div className="mt-3 grid gap-2">
-                {deliveryQuotes.slice(0, 3).map((quote) => (
-                  <div key={quote.code} className="flex items-center justify-between rounded-md bg-mist p-3 text-sm">
-                    <span>
-                      <span className="block font-semibold">{quote.name}</span>
-                      <span className="text-slate-600">{quote.min_days}-{quote.max_days} dias uteis</span>
-                    </span>
-                    <span className="font-semibold">{formatMoney(Number(quote.amount), quote.currency, displayCurrency)}</span>
-                  </div>
                 ))}
               </div>
             ) : null}
-          </section>
+          </div>
 
-          <div className="mt-8 grid gap-3 text-sm sm:grid-cols-3">
-            <div className="rounded-lg border border-slate-200 p-4">
-              <Truck className="h-5 w-5 text-primary" />
-              <p className="mt-2 font-semibold">{t("internationalShippingCard", language)}</p>
-              <p className="mt-1 text-slate-600">{t("deliveryEstimateCheckout", language)}</p>
+          <div className="panel overflow-hidden bg-white">
+            <div className="border-b border-slate-200 px-6 py-5 md:px-8">
+              <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-slate-400">
+                <span>{product.currency}</span>
+                <span>{product.sku}</span>
+                {product.is_bestseller ? <span className="badge-subtle">Best seller</span> : null}
+              </div>
+              <h1 className="mt-4 text-3xl font-semibold leading-tight tracking-[-0.04em] text-slate-950 md:text-5xl">{displayName}</h1>
+              <p className="mt-4 text-sm leading-7 text-slate-600 md:text-base">{displayDescription}</p>
             </div>
-            <div className="rounded-lg border border-slate-200 p-4">
-              <ShieldCheck className="h-5 w-5 text-primary" />
-              <p className="mt-2 font-semibold">{t("secureCheckoutCard", language)}</p>
-              <p className="mt-1 text-slate-600">{t("paymentTrusted", language)}</p>
-            </div>
-            <div className="rounded-lg border border-slate-200 p-4">
-              <ShoppingBag className="h-5 w-5 text-primary" />
-              <p className="mt-2 font-semibold">{t("easyReturnsCard", language)}</p>
-              <p className="mt-1 text-slate-600">{t("returnsGlobal", language)}</p>
+
+            <div className="space-y-8 px-6 py-6 md:px-8 md:py-8">
+              <div className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200 pb-6">
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Price</p>
+                  <div className="mt-2 flex items-end gap-3">
+                    <p className="text-4xl font-semibold tracking-[-0.05em] text-slate-950">{formatMoney(displayPrice, product.currency, displayCurrency)}</p>
+                    {compareAt ? <p className="pb-1 text-base text-slate-400 line-through">{formatMoney(compareAt, product.currency, displayCurrency)}</p> : null}
+                  </div>
+                </div>
+                <div className="text-right text-sm">
+                  <p className="font-semibold text-slate-950">{maxStock > 0 ? `${maxStock} ${t("inStockCount", language)}` : t("outOfStock", language)}</p>
+                  <p className="mt-1 text-slate-500">{selectedVariant?.sku ?? product.sku}</p>
+                </div>
+              </div>
+
+              <div>
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">{t("model", language)}</p>
+                  {product.variants.length > 8 ? (
+                    <button className="text-sm font-semibold text-slate-700 transition hover:text-slate-950" onClick={() => setShowAllVariants((value) => !value)}>
+                      {showAllVariants
+                        ? language === "pt"
+                          ? "Ver menos"
+                          : language === "es"
+                            ? "Ver menos"
+                            : "Show less"
+                        : `${language === "pt" ? "Ver mais opções" : language === "es" ? "Ver más opciones" : "Show more options"} (${product.variants.length})`}
+                    </button>
+                  ) : null}
+                </div>
+
+                {optionGroups.length ? (
+                  <div className="space-y-5">
+                    {optionGroups.map(([name, values]) => {
+                      const selectedIndex = selectedVariant ? product.variants.indexOf(selectedVariant) : 0;
+                      const selectedOptions = selectedVariant ? variantDisplayOptions(product, selectedVariant, Math.max(0, selectedIndex), language) : {};
+                      return (
+                        <div key={name}>
+                          <p className="text-sm font-semibold text-slate-900">{name}</p>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {values.map((value) => {
+                              const active = selectedOptions[name] === value;
+                              return (
+                                <button
+                                  key={value}
+                                  type="button"
+                                  className={`border px-4 py-2.5 text-sm font-semibold transition ${active ? "border-slate-950 bg-slate-950 text-white" : "border-slate-300 bg-white text-slate-800 hover:border-slate-950"}`}
+                                  onClick={() => selectOption(name, value)}
+                                >
+                                  {value}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
+
+                {!optionGroups.length || showAllVariants ? (
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                    {visibleVariants.map((variant) => {
+                      const option = variantOptionSummary(product, variant, product.variants.indexOf(variant), language);
+                      return (
+                        <button
+                          key={variant.id}
+                          className={`grid grid-cols-[56px_1fr] gap-3 border p-3 text-left transition ${selectedVariant?.id === variant.id ? "border-slate-950 bg-[#f6f4ee]" : "border-slate-200 bg-white hover:border-slate-300"}`}
+                          onClick={() => selectVariant(variant)}
+                        >
+                          <span className="overflow-hidden border border-slate-200 bg-[#f3efe8]">
+                            {variant.image_url ? <img src={variant.image_url} alt="" className="aspect-square h-full w-full object-cover" /> : <span className="block aspect-square" />}
+                          </span>
+                          <span>
+                            <span className="block text-sm font-semibold text-slate-950">{option.title}</span>
+                            <span className="mt-1 block text-xs text-slate-500">{option.detail}</span>
+                            <span className="mt-2 block text-xs uppercase tracking-[0.18em] text-slate-400">{variant.sku}</span>
+                            <span className="mt-2 block text-sm text-slate-600">{variant.stock > 0 ? `${variant.stock} ${t("inStockCount", language)}` : t("outOfStock", language)}</span>
+                            {deliveryVariantIds.includes(variant.id) ? <span className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-emerald-700"><Check className="h-3.5 w-3.5" />Entrega nesse CEP</span> : null}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3 border-t border-slate-200 pt-6">
+                <QuantityStepper value={quantity} max={Math.max(1, maxStock)} onChange={setQuantity} />
+                <button className="btn-primary h-12 px-6 disabled:border-slate-300 disabled:bg-slate-300" disabled={!canBuy} onClick={handleAddToCart}>
+                  <ShoppingBag className="h-4 w-4" />
+                  {t("addToCart", language)}
+                </button>
+                <button className="btn-secondary h-12 px-4" onClick={handleFavorite}>
+                  <Heart className={`h-4 w-4 ${hasFavorite(product.id) ? "fill-current" : ""}`} />
+                  {hasFavorite(product.id) ? t("saved", language) : t("favorite", language)}
+                </button>
+              </div>
+
+              {!canBuy ? (
+                <p className="text-sm text-red-600">
+                  {language === "pt"
+                    ? "Selecione uma opção disponível antes de adicionar ao carrinho."
+                    : language === "es"
+                      ? "Selecciona una opción disponible antes de añadir al carrito."
+                      : "Select an available option before adding this product to the cart."}
+                </p>
+              ) : null}
+
+              <section className="panel-muted p-5 md:p-6">
+                <div className="flex items-center gap-3">
+                  <Truck className="h-5 w-5 text-slate-900" />
+                  <h2 className="text-lg font-semibold text-slate-950">{t("checkDelivery", language)}</h2>
+                </div>
+
+                <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-[88px_1fr_1fr_1fr_auto]">
+                  <input className="input-clean" placeholder={t("country", language)} value={deliveryForm.country} onChange={(event) => setDeliveryForm({ ...deliveryForm, country: event.target.value.toUpperCase() })} maxLength={2} />
+                  <input className="input-clean" placeholder={t("postalCode", language)} value={deliveryForm.postal_code} onChange={(event) => setDeliveryForm({ ...deliveryForm, postal_code: event.target.value })} />
+                  <input className="input-clean" placeholder={t("state", language)} value={deliveryForm.state} onChange={(event) => setDeliveryForm({ ...deliveryForm, state: event.target.value })} />
+                  <input className="input-clean" placeholder={t("city", language)} value={deliveryForm.city} onChange={(event) => setDeliveryForm({ ...deliveryForm, city: event.target.value })} />
+                  <button className="btn-primary h-12 px-5 disabled:border-slate-300 disabled:bg-slate-300" disabled={checkingDelivery || !selectedVariant || !deliveryForm.postal_code || !deliveryForm.state || !deliveryForm.city} onClick={checkDelivery}>
+                    {checkingDelivery ? (language === "pt" ? "Verificando..." : language === "es" ? "Verificando..." : "Checking...") : (language === "pt" ? "Verificar" : language === "es" ? "Verificar" : "Check")}
+                  </button>
+                </div>
+
+                {deliveryStatus ? <p className={`mt-4 text-sm ${deliveryQuotes.length ? "text-emerald-700" : "text-red-600"}`}>{deliveryStatus}</p> : null}
+
+                {deliveryQuotes.length ? (
+                  <div className="mt-4 grid gap-3">
+                    {deliveryQuotes.slice(0, 3).map((quote) => (
+                      <div key={quote.code} className="flex items-center justify-between gap-4 border border-slate-200 bg-white p-4 text-sm">
+                        <span>
+                          <span className="block font-semibold text-slate-950">{quote.name}</span>
+                          <span className="mt-1 block text-slate-600">{quote.min_days}-{quote.max_days} dias úteis</span>
+                        </span>
+                        <span className="font-semibold text-slate-950">{formatMoney(Number(quote.amount), quote.currency, displayCurrency)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </section>
+
+              <div className="grid gap-3 sm:grid-cols-3 text-sm">
+                {[
+                  { icon: Truck, title: t("internationalShippingCard", language), text: t("deliveryEstimateCheckout", language) },
+                  { icon: ShieldCheck, title: t("secureCheckoutCard", language), text: t("paymentTrusted", language) },
+                  { icon: ShoppingBag, title: t("easyReturnsCard", language), text: t("returnsGlobal", language) },
+                ].map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <div key={item.title} className="border border-slate-200 bg-[#f8f6f1] p-4">
+                      <Icon className="h-5 w-5 text-slate-900" />
+                      <p className="mt-3 font-semibold text-slate-950">{item.title}</p>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">{item.text}</p>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <div className="mt-12 grid gap-8 lg:grid-cols-[1fr_320px]">
-        <div>
-          <h2 className="text-xl font-semibold">{t("description", language)}</h2>
-          <p className="mt-3 max-w-3xl leading-8 text-slate-600">{displayDescription}</p>
+        <div className="mt-10 grid gap-8 lg:grid-cols-[1fr_340px]">
+          <div className="panel p-6 md:p-8">
+            <h2 className="text-2xl font-semibold tracking-[-0.03em] text-slate-950">{t("description", language)}</h2>
+            <p className="mt-4 max-w-3xl text-sm leading-8 text-slate-600 md:text-base">{displayDescription}</p>
+          </div>
+
+          <div className="panel p-6 md:p-8">
+            <h2 className="text-lg font-semibold text-slate-950">{t("specifications", language)}</h2>
+            <dl className="mt-5 space-y-4 text-sm">
+              <div className="flex justify-between gap-4 border-b border-slate-200 pb-3">
+                <dt className="text-slate-500">{t("currency", language)}</dt>
+                <dd className="font-medium text-slate-950">{product.currency}</dd>
+              </div>
+              <div className="flex justify-between gap-4 border-b border-slate-200 pb-3">
+                <dt className="text-slate-500">{t("status", language)}</dt>
+                <dd className="font-medium text-slate-950">{product.status}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-slate-500">SKU</dt>
+                <dd className="font-medium text-slate-950">{selectedVariant?.sku ?? product.sku}</dd>
+              </div>
+            </dl>
+          </div>
         </div>
-        <div className="rounded-lg border border-slate-200 p-5">
-          <h2 className="text-base font-semibold">{t("specifications", language)}</h2>
-          <dl className="mt-4 space-y-3 text-sm">
-            <div className="flex justify-between gap-4">
-              <dt className="text-slate-500">{t("currency", language)}</dt>
-              <dd>{product.currency}</dd>
+
+        <section className="mt-10">
+          <div className="mb-6 flex items-end justify-between gap-4">
+            <div>
+              <p className="kicker-line">Customer voice</p>
+              <h2 className="mt-4 text-2xl font-semibold tracking-[-0.03em] text-slate-950">{t("customerReviews", language)}</h2>
             </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-slate-500">{t("status", language)}</dt>
-              <dd>{product.status}</dd>
-            </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-slate-500">SKU</dt>
-              <dd>{selectedVariant?.sku ?? product.sku}</dd>
-            </div>
-          </dl>
-        </div>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            {reviews.length === 0 ? (
+              <div className="panel p-6 text-sm text-slate-600">{t("noReviews", language)}</div>
+            ) : (
+              reviews.map((review) => (
+                <article key={review.id} className="panel p-6">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-lg font-semibold text-slate-950">{review.title ?? "Review"}</h3>
+                    <span className="badge-subtle border-slate-900 text-slate-900">{review.rating}/5</span>
+                  </div>
+                  <p className="mt-3 text-sm leading-7 text-slate-600">{review.comment}</p>
+                  <p className="mt-4 text-xs uppercase tracking-[0.18em] text-slate-400">{review.customer_name}{review.verified_purchase ? " · Verified purchase" : ""}</p>
+                  {review.admin_reply ? <p className="mt-4 border border-slate-200 bg-[#f8f6f1] p-4 text-sm leading-6 text-slate-600">{review.admin_reply}</p> : null}
+                </article>
+              ))
+            )}
+          </div>
+        </section>
+
+        <Link to="/catalog" className="mt-10 inline-flex text-sm font-semibold text-slate-700 underline underline-offset-4 transition hover:text-slate-950">
+          {t("backToCatalog", language)}
+        </Link>
       </div>
-      <section className="mt-12">
-        <h2 className="text-xl font-semibold">{t("customerReviews", language)}</h2>
-        <div className="mt-4 grid gap-4 md:grid-cols-2">
-          {reviews.length === 0 ? (
-            <div className="rounded-lg border border-slate-200 p-5 text-sm text-slate-600">{t("noReviews", language)}</div>
-          ) : (
-            reviews.map((review) => (
-              <article key={review.id} className="rounded-lg border border-slate-200 p-5 shadow-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <h3 className="font-semibold">{review.title ?? "Review"}</h3>
-                  <span className="text-sm font-semibold text-primary">{review.rating}/5</span>
-                </div>
-                <p className="mt-2 text-sm text-slate-600">{review.comment}</p>
-                <p className="mt-3 text-xs text-slate-500">{review.customer_name}{review.verified_purchase ? " · Verified purchase" : ""}</p>
-                {review.admin_reply ? <p className="mt-3 rounded-md bg-mist p-3 text-sm text-slate-600">{review.admin_reply}</p> : null}
-              </article>
-            ))
-          )}
-        </div>
-      </section>
-      <Link to="/catalog" className="mt-10 inline-flex text-sm font-semibold text-primary">
-        {t("backToCatalog", language)}
-      </Link>
     </section>
   );
 }

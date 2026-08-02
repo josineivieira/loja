@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CreditCard, Loader2, MapPin, PackageCheck, Truck } from "lucide-react";
+import { CheckCircle2, CreditCard, Loader2, MapPin, PackageCheck, ShieldCheck, Truck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router-dom";
@@ -84,6 +84,12 @@ const checkoutCopy: Record<Language, Record<string, string>> = {
     postalNotFound: "Postal code not found.",
     postalFilled: "Address filled from postal code. Add the street number.",
     postalFailed: "Unable to look up postal code.",
+    secureSummary: "Protected session",
+    secureSummaryCopy: "Encrypted checkout with final validation before payment.",
+    deliverySummary: "Shipping recalculation",
+    deliverySummaryCopy: "Destination and method are reviewed before the order is created.",
+    reviewSummary: "Final review",
+    reviewSummaryCopy: "You approve totals and routing before payment starts.",
   },
   pt: {
     checkout: "Finalizar compra",
@@ -124,26 +130,32 @@ const checkoutCopy: Record<Language, Record<string, string>> = {
     postalNotFound: "CEP não encontrado.",
     postalFilled: "Endereço preenchido pelo CEP. Adicione o número.",
     postalFailed: "Não foi possível consultar o CEP.",
+    secureSummary: "Sessão protegida",
+    secureSummaryCopy: "Checkout criptografado com validação final antes do pagamento.",
+    deliverySummary: "Recalculo do frete",
+    deliverySummaryCopy: "Destino e método são conferidos antes da criação do pedido.",
+    reviewSummary: "Revisão final",
+    reviewSummaryCopy: "Você confirma totais e rota do pedido antes do pagamento.",
   },
   es: {
     checkout: "Finalizar compra",
-    identification: "Identificacion",
-    address: "Direccion",
+    identification: "Identificación",
+    address: "Dirección",
     delivery: "Entrega",
     payment: "Pago",
-    review: "Revision",
-    emptyCart: "Tu carrito esta vacio",
-    browseCatalog: "Ver catalogo",
+    review: "Revisión",
+    emptyCart: "Tu carrito está vacío",
+    browseCatalog: "Ver catálogo",
     creatingPayment: "Creando pago seguro...",
-    doNotClose: "No cierres ni actualices esta pagina.",
-    invalidField: "Campo invalido",
+    doNotClose: "No cierres ni actualices esta página.",
+    invalidField: "Campo inválido",
     notes: "Notas",
-    deliveryMethod: "Metodo de entrega",
-    businessDays: "dias habiles",
+    deliveryMethod: "Método de entrega",
+    businessDays: "días hábiles",
     trackingAvailable: "Rastreo disponible",
     trackingUnavailable: "Rastreo no informado",
     free: "Gratis",
-    paymentInfo: "Despues de realizar el pedido, Nexora crea una sesion segura de pago en Stripe. Si las claves de produccion aun no estan configuradas, el pedido queda pendiente sin cobrar la tarjeta.",
+    paymentInfo: "Después de realizar el pedido, Nexora crea una sesión segura de pago en Stripe. Si las claves de producción aún no están configuradas, el pedido queda pendiente sin cobrar la tarjeta.",
     reviewOrder: "Revisar pedido",
     back: "Volver",
     checking: "Verificando...",
@@ -151,43 +163,49 @@ const checkoutCopy: Record<Language, Record<string, string>> = {
     redirecting: "Redirigiendo...",
     placeOrder: "Realizar pedido",
     summary: "Resumen",
-    coupon: "Cupon",
+    coupon: "Cupón",
     apply: "Aplicar",
     subtotal: "Subtotal",
     discount: "Descuento",
-    shipping: "Envio",
+    shipping: "Envío",
     taxes: "Impuestos",
     total: "Total",
     currencyNote: "Valores mostrados en {display}. El cobro final se procesa en {charge}.",
-    recalculationNote: "El sistema recalcula precios, descuentos, envio y stock antes de crear el pedido.",
-    postalLooking: "Consultando codigo postal...",
-    postalNotFound: "Codigo postal no encontrado.",
-    postalFilled: "Direccion completada por codigo postal. Agrega el numero.",
-    postalFailed: "No se pudo consultar el codigo postal.",
+    recalculationNote: "El sistema recalcula precios, descuentos, envío y stock antes de crear el pedido.",
+    postalLooking: "Consultando código postal...",
+    postalNotFound: "Código postal no encontrado.",
+    postalFilled: "Dirección completada por código postal. Agrega el número.",
+    postalFailed: "No se pudo consultar el código postal.",
+    secureSummary: "Sesión protegida",
+    secureSummaryCopy: "Checkout cifrado con validación final antes del pago.",
+    deliverySummary: "Recalculo del envío",
+    deliverySummaryCopy: "Destino y método se revisan antes de crear el pedido.",
+    reviewSummary: "Revisión final",
+    reviewSummaryCopy: "Apruebas totales y ruta del pedido antes de iniciar el pago.",
   },
 };
 
 const localizedIdentityFields: Record<Language, Array<[keyof CheckoutAddressForm, string]>> = {
   en: [["first_name", "First name"], ["last_name", "Last name"], ["email", "E-mail"], ["phone", "Phone"]],
   pt: identityFields,
-  es: [["first_name", "Nombre"], ["last_name", "Apellido"], ["email", "E-mail"], ["phone", "Telefono"]],
+  es: [["first_name", "Nombre"], ["last_name", "Apellido"], ["email", "E-mail"], ["phone", "Teléfono"]],
 };
 
 const localizedAddressFields: Record<Language, Array<[keyof CheckoutAddressForm, string]>> = {
   en: [["country", "Country"], ["postal_code", "Postal code"], ["state", "State/Province"], ["city", "City"], ["district", "District"], ["address_line1", "Address"], ["address_line2", "Complement"]],
   pt: addressFields,
-  es: [["country", "Pais"], ["postal_code", "Codigo postal"], ["state", "Estado/Provincia"], ["city", "Ciudad"], ["district", "Barrio"], ["address_line1", "Direccion"], ["address_line2", "Complemento"]],
+  es: [["country", "País"], ["postal_code", "Código postal"], ["state", "Estado/Provincia"], ["city", "Ciudad"], ["district", "Barrio"], ["address_line1", "Dirección"], ["address_line2", "Complemento"]],
 };
 
 function shippingDisplayName(name: string, code: string, language: Language) {
   const source = `${name} ${code}`.toLowerCase();
   if (source.includes("postal") || source.includes("postnl")) {
-    return language === "pt" ? "Envio postal internacional" : language === "es" ? "Envio postal internacional" : "International postal shipping";
+    return language === "pt" ? "Envio postal internacional" : language === "es" ? "Envío postal internacional" : "International postal shipping";
   }
   if (source.includes("special") || source.includes("liquid") || source.includes("line")) {
-    return language === "pt" ? "Envio rastreado" : language === "es" ? "Envio con rastreo" : "Tracked shipping";
+    return language === "pt" ? "Envio rastreado" : language === "es" ? "Envío con rastreo" : "Tracked shipping";
   }
-  return language === "pt" ? "Envio econômico" : language === "es" ? "Envio económico" : "Economy shipping";
+  return language === "pt" ? "Envio econômico" : language === "es" ? "Envío económico" : "Economy shipping";
 }
 
 function customerMessage(message: string) {
@@ -284,7 +302,7 @@ export function CheckoutPage() {
       }
     }, 400);
     return () => window.clearTimeout(timeout);
-  }, [watchedPostalCode, watchedCountry, form]);
+  }, [watchedPostalCode, watchedCountry, form, copy.postalFailed, copy.postalFilled, copy.postalLooking, copy.postalNotFound]);
 
   async function applyCoupon() {
     await recalculate(form.getValues(), couponCode, shippingMethodCode);
@@ -379,12 +397,15 @@ export function CheckoutPage() {
 
   if (items.length === 0) {
     return (
-      <section className="mx-auto max-w-7xl px-4 py-16">
-        <div className="rounded-lg border border-slate-200 p-10 text-center">
-          <h1 className="text-3xl font-semibold">{copy.emptyCart}</h1>
-          <Link to="/catalog" className="mt-6 inline-flex rounded-md bg-primary px-5 py-3 text-sm font-semibold text-white">
-            {copy.browseCatalog}
-          </Link>
+      <section className="section-space">
+        <div className="shell">
+          <div className="panel mx-auto max-w-3xl p-10 text-center md:p-16">
+            <p className="eyebrow">Checkout</p>
+            <h1 className="mt-4 text-3xl font-semibold tracking-[-0.04em] text-slate-950 md:text-5xl">{copy.emptyCart}</h1>
+            <Link to="/catalog" className="btn-primary mt-8">
+              {copy.browseCatalog}
+            </Link>
+          </div>
         </div>
       </section>
     );
@@ -393,137 +414,255 @@ export function CheckoutPage() {
   const totals = calculation?.totals;
   const currency = totals?.currency ?? items[0]?.currency ?? "USD";
 
+  const stepItems = [
+    { label: copy.identification, icon: MapPin, index: 1 },
+    { label: copy.address, icon: MapPin, index: 2 },
+    { label: copy.delivery, icon: Truck, index: 3 },
+    { label: copy.payment, icon: CreditCard, index: 4 },
+    { label: copy.review, icon: PackageCheck, index: 5 },
+  ];
+
   return (
-    <section className="relative mx-auto max-w-7xl px-4 py-8">
+    <section className="relative section-space pt-8">
       {submitting ? (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-white/80 backdrop-blur-sm">
-          <div className="rounded-lg border border-slate-200 bg-white p-6 text-center shadow-lg">
-            <Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" />
-            <p className="mt-3 font-semibold">{copy.creatingPayment}</p>
-            <p className="mt-1 text-sm text-slate-600">{copy.doNotClose}</p>
+        <div className="fixed inset-0 z-50 grid place-items-center bg-[#f7f5f0]/90 backdrop-blur-sm">
+          <div className="panel w-full max-w-md p-8 text-center">
+            <Loader2 className="mx-auto h-7 w-7 animate-spin text-slate-900" />
+            <p className="mt-4 text-lg font-semibold text-slate-950">{copy.creatingPayment}</p>
+            <p className="mt-2 text-sm text-slate-600">{copy.doNotClose}</p>
           </div>
         </div>
       ) : null}
-      <div className="mb-8">
-        <h1 className="text-3xl font-semibold">{copy.checkout}</h1>
-        <div className="mt-5 grid gap-3 md:grid-cols-5">
-          {[
-            [copy.identification, MapPin],
-            [copy.address, MapPin],
-            [copy.delivery, Truck],
-            [copy.payment, CreditCard],
-            [copy.review, PackageCheck],
-          ].map(([label, Icon], index) => (
-            <button key={label as string} disabled={submitting || loading} className={`rounded-md border px-3 py-3 text-left text-sm disabled:opacity-60 ${step === index + 1 ? "border-primary bg-blue-50 text-primary" : "border-slate-200"}`} onClick={() => goToStep(index + 1)}>
-              <Icon className="mb-2 h-4 w-4" />
-              {label as string}
-            </button>
-          ))}
+
+      <div className="shell">
+        <div className="panel mb-8 overflow-hidden">
+          <div className="grid gap-6 p-6 md:p-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-end">
+            <div>
+              <p className="eyebrow">Nexora secure checkout</p>
+              <h1 className="mt-4 text-4xl font-semibold tracking-[-0.05em] text-slate-950 md:text-5xl">{copy.checkout}</h1>
+              <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-600">
+                {language === "pt"
+                  ? "Refizemos o checkout com aparência mais premium, hierarquia mais clara e uma sensação de confiança muito mais forte em cada etapa."
+                  : language === "es"
+                    ? "Rediseñamos el checkout con una apariencia más premium, jerarquía más clara y una sensación de confianza mucho más fuerte en cada etapa."
+                    : "The checkout has been redesigned with a more premium appearance, clearer hierarchy and stronger trust at every step."}
+              </p>
+            </div>
+
+            <div className="grid gap-3 text-sm text-slate-600 md:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+              <div className="border border-slate-200 bg-[#f8f6f1] p-4">
+                <p className="font-semibold text-slate-950">{copy.secureSummary}</p>
+                <p className="mt-2 leading-6">{copy.secureSummaryCopy}</p>
+              </div>
+              <div className="border border-slate-200 bg-[#f8f6f1] p-4">
+                <p className="font-semibold text-slate-950">{copy.deliverySummary}</p>
+                <p className="mt-2 leading-6">{copy.deliverySummaryCopy}</p>
+              </div>
+              <div className="border border-slate-200 bg-[#f8f6f1] p-4">
+                <p className="font-semibold text-slate-950">{copy.reviewSummary}</p>
+                <p className="mt-2 leading-6">{copy.reviewSummaryCopy}</p>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
 
-      <form onSubmit={form.handleSubmit(submit)} className="grid gap-8 lg:grid-cols-[1fr_360px]">
-        <div className="rounded-lg border border-slate-200 p-5 shadow-sm">
-          {error ? <div className="mb-5 rounded-md bg-red-50 p-3 text-sm text-danger">{error}</div> : null}
+        <div className="mb-8 grid gap-3 md:grid-cols-5">
+          {stepItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = step === item.index;
+            const isDone = step > item.index;
+            return (
+              <button
+                key={item.label}
+                disabled={submitting || loading}
+                className={`flex min-h-[88px] items-center gap-4 border px-4 py-4 text-left transition disabled:opacity-60 ${isActive ? "border-slate-950 bg-slate-950 text-white" : isDone ? "border-slate-300 bg-white text-slate-900" : "border-slate-200 bg-[#f8f6f1] text-slate-600"}`}
+                onClick={() => goToStep(item.index)}
+              >
+                <span className={`inline-flex h-10 w-10 items-center justify-center border ${isActive ? "border-white/20 bg-white/10" : "border-slate-300 bg-white"}`}>
+                  {isDone ? <CheckCircle2 className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
+                </span>
+                <span>
+                  <span className="block text-[11px] uppercase tracking-[0.2em] opacity-70">0{item.index}</span>
+                  <span className="mt-1 block text-sm font-semibold">{item.label}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
 
-          {step <= 2 ? (
-            <div className="grid gap-4 md:grid-cols-2">
-              {(step === 1 ? localizedIdentityFields[language] : localizedAddressFields[language]).map(([name, label]) => (
-                <label key={name} className={name === "address_line1" ? "text-sm font-medium md:col-span-2" : "text-sm font-medium"}>
-                  {label}
-                  <input className="mt-2 h-10 w-full rounded-md border border-slate-200 px-3 text-sm outline-none focus:border-primary" {...form.register(name as keyof CheckoutAddressForm)} />
-                  {form.formState.errors[name as keyof CheckoutAddressForm] ? <span className="mt-1 block text-xs text-danger">{copy.invalidField}</span> : null}
-                </label>
-              ))}
-              {cepStatus ? <p className="text-sm text-slate-600 md:col-span-2">{cepStatus}</p> : null}
-              <label className="text-sm font-medium md:col-span-2">
-                {copy.notes}
-                <textarea className="mt-2 min-h-24 w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-primary" {...form.register("notes")} />
-              </label>
-            </div>
-          ) : null}
+        <form onSubmit={form.handleSubmit(submit)} className="grid gap-8 lg:grid-cols-[1fr_400px]">
+          <div className="panel p-5 md:p-8">
+            {error ? <div className="mb-6 border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div> : null}
 
-          {step === 3 ? (
-            <div>
-              <h2 className="text-lg font-semibold">{copy.deliveryMethod}</h2>
-              <div className="mt-4 grid gap-3">
-                {(calculation?.shipping_methods ?? []).map((method) => (
-                  <label key={method.code} className={`flex cursor-pointer items-center justify-between gap-4 rounded-md border p-4 ${shippingMethodCode === method.code ? "border-primary bg-blue-50" : "border-slate-200"}`}>
-                    <span>
-                      <span className="block font-semibold">{shippingDisplayName(method.name, method.code, language)}</span>
-                      <span className="mt-1 block text-sm text-slate-600">{method.min_days}-{method.max_days} {copy.businessDays}</span>
-                      <span className="mt-1 block text-xs text-slate-500">{method.tracking_available ? copy.trackingAvailable : copy.trackingUnavailable}</span>
-                    </span>
-                    <span className="flex items-center gap-3">
-                      <span className="font-semibold">{Number(method.amount) === 0 ? copy.free : formatMoney(Number(method.amount), method.currency, displayCurrency)}</span>
-                      <input type="radio" checked={shippingMethodCode === method.code} onChange={() => selectShippingMethod(method.code)} />
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          {step === 4 ? (
-            <div>
-              <h2 className="text-lg font-semibold">{copy.payment}</h2>
-              <div className="mt-4 rounded-md border border-slate-200 p-4 text-sm text-slate-600">
-                {copy.paymentInfo}
-              </div>
-            </div>
-          ) : null}
-
-          {step === 5 ? (
-            <div>
-              <h2 className="text-lg font-semibold">{copy.reviewOrder}</h2>
-              <div className="mt-4 space-y-3">
-                {calculation?.items.map((item) => (
-                  <div key={item.variant_id} className="flex justify-between gap-4 rounded-md bg-mist p-3 text-sm">
-                    <span>{item.product_name} x {item.quantity}</span>
-                    <span>{formatMoney(Number(item.total_price), item.currency, displayCurrency)}</span>
+            {step <= 2 ? (
+              <div>
+                <div className="mb-6 flex items-end justify-between gap-4 border-b border-slate-200 pb-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Step 0{step}</p>
+                    <h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-slate-950">{step === 1 ? copy.identification : copy.address}</h2>
                   </div>
-                ))}
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  {(step === 1 ? localizedIdentityFields[language] : localizedAddressFields[language]).map(([name, label]) => (
+                    <label key={name} className={name === "address_line1" ? "text-sm font-medium text-slate-700 md:col-span-2" : "text-sm font-medium text-slate-700"}>
+                      <span>{label}</span>
+                      <input className="input-clean mt-2" {...form.register(name as keyof CheckoutAddressForm)} />
+                      {form.formState.errors[name as keyof CheckoutAddressForm] ? <span className="mt-2 block text-xs text-red-600">{copy.invalidField}</span> : null}
+                    </label>
+                  ))}
+                  {cepStatus ? <p className="text-sm text-slate-600 md:col-span-2">{cepStatus}</p> : null}
+                  <label className="text-sm font-medium text-slate-700 md:col-span-2">
+                    <span>{copy.notes}</span>
+                    <textarea className="textarea-clean mt-2" {...form.register("notes")} />
+                  </label>
+                </div>
               </div>
-            </div>
-          ) : null}
+            ) : null}
 
-          <div className="mt-6 flex justify-between gap-3">
-            <button type="button" className="rounded-md border border-slate-200 px-4 py-2 text-sm disabled:text-slate-300" disabled={step === 1 || submitting} onClick={() => setStep((value) => value - 1)}>
-              {copy.back}
-            </button>
-            {step < 5 ? (
-              <button type="button" disabled={loading || submitting} className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-300" onClick={continueCheckout}>
-                {loading ? copy.checking : copy.continue}
-              </button>
-            ) : (
-              <button type="submit" disabled={submitting || loading} className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-300">
-                {submitting ? copy.redirecting : copy.placeOrder}
-              </button>
-            )}
-          </div>
-        </div>
+            {step === 3 ? (
+              <div>
+                <div className="mb-6 flex items-end justify-between gap-4 border-b border-slate-200 pb-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Step 03</p>
+                    <h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-slate-950">{copy.deliveryMethod}</h2>
+                  </div>
+                </div>
 
-        <aside className="h-fit rounded-lg border border-slate-200 p-5 shadow-sm">
-          <h2 className="text-lg font-semibold">{copy.summary}</h2>
-          <div className="mt-4 flex gap-2">
-            <input className="h-10 min-w-0 flex-1 rounded-md border border-slate-200 px-3 text-sm uppercase outline-none" placeholder={copy.coupon} value={couponCode} onChange={(event) => setCouponCode(event.target.value.toUpperCase())} />
-            <button type="button" disabled={loading || submitting} className="rounded-md border border-slate-200 px-3 text-sm font-semibold disabled:text-slate-300" onClick={applyCoupon}>
-              {copy.apply}
-            </button>
-          </div>
-          <div className="mt-5 space-y-3 text-sm">
-            <div className="flex justify-between"><span className="text-slate-600">{copy.subtotal}</span><span>{formatMoney(Number(totals?.subtotal_amount ?? 0), currency, displayCurrency)}</span></div>
-            <div className="flex justify-between"><span className="text-slate-600">{copy.discount}</span><span>{formatMoney(Number(totals?.discount_amount ?? 0), currency, displayCurrency)}</span></div>
-            <div className="flex justify-between"><span className="text-slate-600">{copy.shipping}</span><span>{formatMoney(Number(totals?.shipping_amount ?? 0), currency, displayCurrency)}</span></div>
-            <div className="flex justify-between"><span className="text-slate-600">{copy.taxes}</span><span>{formatMoney(Number(totals?.tax_amount ?? 0), currency, displayCurrency)}</span></div>
-            <div className="border-t border-slate-200 pt-3 text-base font-semibold">
-              <div className="flex justify-between"><span>{copy.total}</span><span>{formatMoney(Number(totals?.total_amount ?? 0), currency, displayCurrency)}</span></div>
+                <div className="grid gap-3">
+                  {(calculation?.shipping_methods ?? []).map((method) => (
+                    <label key={method.code} className={`grid cursor-pointer gap-4 border p-5 transition md:grid-cols-[1fr_auto] ${shippingMethodCode === method.code ? "border-slate-950 bg-[#f6f4ee]" : "border-slate-200 bg-white hover:border-slate-300"}`}>
+                      <span>
+                        <span className="block text-lg font-semibold text-slate-950">{shippingDisplayName(method.name, method.code, language)}</span>
+                        <span className="mt-2 block text-sm text-slate-600">{method.min_days}-{method.max_days} {copy.businessDays}</span>
+                        <span className="mt-2 block text-xs uppercase tracking-[0.2em] text-slate-400">{method.tracking_available ? copy.trackingAvailable : copy.trackingUnavailable}</span>
+                      </span>
+                      <span className="flex items-center gap-4 md:justify-end">
+                        <span className="text-lg font-semibold text-slate-950">{Number(method.amount) === 0 ? copy.free : formatMoney(Number(method.amount), method.currency, displayCurrency)}</span>
+                        <input type="radio" checked={shippingMethodCode === method.code} onChange={() => selectShippingMethod(method.code)} />
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {step === 4 ? (
+              <div>
+                <div className="mb-6 flex items-end justify-between gap-4 border-b border-slate-200 pb-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Step 04</p>
+                    <h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-slate-950">{copy.payment}</h2>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-[1fr_280px]">
+                  <div className="border border-slate-200 bg-[#f8f6f1] p-5 text-sm leading-7 text-slate-600">{copy.paymentInfo}</div>
+                  <div className="border border-slate-200 bg-white p-5">
+                    <div className="flex items-start gap-3">
+                      <ShieldCheck className="mt-1 h-5 w-5 text-slate-900" />
+                      <div>
+                        <p className="font-semibold text-slate-950">Stripe / secure session</p>
+                        <p className="mt-2 text-sm leading-6 text-slate-600">
+                          {language === "pt" ? "O redirecionamento acontece somente após a revisão final do pedido." : language === "es" ? "La redirección ocurre solo después de la revisión final del pedido." : "Redirection only happens after the final order review."}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {step === 5 ? (
+              <div>
+                <div className="mb-6 flex items-end justify-between gap-4 border-b border-slate-200 pb-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Step 05</p>
+                    <h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-slate-950">{copy.reviewOrder}</h2>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {calculation?.items.map((item) => (
+                    <div key={item.variant_id} className="flex items-center justify-between gap-4 border border-slate-200 bg-[#f8f6f1] p-4 text-sm">
+                      <span>
+                        <span className="block font-semibold text-slate-950">{item.product_name}</span>
+                        <span className="mt-1 block text-slate-500">{item.variant_sku} · {item.quantity}x</span>
+                      </span>
+                      <span className="font-semibold text-slate-950">{formatMoney(Number(item.total_price), item.currency, displayCurrency)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="mt-8 flex flex-wrap justify-between gap-3 border-t border-slate-200 pt-6">
+              <button type="button" className="btn-secondary px-5 py-3 disabled:border-slate-200 disabled:text-slate-300" disabled={step === 1 || submitting} onClick={() => setStep((value) => value - 1)}>
+                {copy.back}
+              </button>
+              {step < 5 ? (
+                <button type="button" disabled={loading || submitting} className="btn-primary px-5 py-3 disabled:border-slate-300 disabled:bg-slate-300" onClick={continueCheckout}>
+                  {loading ? copy.checking : copy.continue}
+                </button>
+              ) : (
+                <button type="submit" disabled={submitting || loading} className="btn-primary px-5 py-3 disabled:border-slate-300 disabled:bg-slate-300">
+                  {submitting ? copy.redirecting : copy.placeOrder}
+                </button>
+              )}
             </div>
           </div>
-          {displayCurrency !== currency ? <p className="mt-3 text-xs leading-5 text-slate-500">{copy.currencyNote.replace("{display}", displayCurrency).replace("{charge}", currency)}</p> : null}
-          <p className="mt-4 text-xs leading-5 text-slate-500">{copy.recalculationNote}</p>
-        </aside>
-      </form>
+
+          <aside className="panel h-fit overflow-hidden">
+            <div className="border-b border-slate-200 bg-slate-950 px-6 py-5 text-white">
+              <h2 className="text-lg font-semibold tracking-[0.02em]">{copy.summary}</h2>
+            </div>
+
+            <div className="space-y-6 p-6">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{copy.coupon}</label>
+                <div className="mt-3 flex gap-2">
+                  <input className="input-clean min-w-0 flex-1 uppercase" placeholder={copy.coupon} value={couponCode} onChange={(event) => setCouponCode(event.target.value.toUpperCase())} />
+                  <button type="button" disabled={loading || submitting} className="btn-secondary px-4 disabled:border-slate-200 disabled:text-slate-300" onClick={applyCoupon}>
+                    {copy.apply}
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-4 text-sm">
+                <div className="flex justify-between gap-4">
+                  <span className="text-slate-500">{copy.subtotal}</span>
+                  <span className="font-medium text-slate-950">{formatMoney(Number(totals?.subtotal_amount ?? 0), currency, displayCurrency)}</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-slate-500">{copy.discount}</span>
+                  <span className="font-medium text-slate-950">{formatMoney(Number(totals?.discount_amount ?? 0), currency, displayCurrency)}</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-slate-500">{copy.shipping}</span>
+                  <span className="font-medium text-slate-950">{formatMoney(Number(totals?.shipping_amount ?? 0), currency, displayCurrency)}</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-slate-500">{copy.taxes}</span>
+                  <span className="font-medium text-slate-950">{formatMoney(Number(totals?.tax_amount ?? 0), currency, displayCurrency)}</span>
+                </div>
+              </div>
+
+              <div className="border-t border-slate-200 pt-5">
+                <div className="flex items-end justify-between gap-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.2em] text-slate-400">{copy.total}</p>
+                    <p className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-slate-950">{formatMoney(Number(totals?.total_amount ?? 0), currency, displayCurrency)}</p>
+                  </div>
+                  <div className="text-right text-xs leading-5 text-slate-500">{items.length} item(s)</div>
+                </div>
+              </div>
+
+              {displayCurrency !== currency ? <p className="text-xs leading-5 text-slate-500">{copy.currencyNote.replace("{display}", displayCurrency).replace("{charge}", currency)}</p> : null}
+              <p className="text-xs leading-5 text-slate-500">{copy.recalculationNote}</p>
+            </div>
+          </aside>
+        </form>
+      </div>
     </section>
   );
 }
