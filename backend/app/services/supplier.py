@@ -333,7 +333,7 @@ class SupplierService:
 
     def _map_supplier_product(self, item: dict[str, Any]) -> SupplierProductRead:
         supplier_product_id = str(self._pick(item, "pid", "productId", "id", "supplierProductId", "productSku", "spu", "productCode", "productNo") or "")
-        name = self._clean_title(str(self._pick(item, "productName", "productNameEn", "productNameCn", "name", "nameEn", "title", "productTitle", "variantNameEn") or "CJ Product"))
+        name = self._clean_title(str(self._english_first(item, "productNameEn", "nameEn", "title", "productTitle", "variantNameEn", "productName", "productNameCn", "name") or "CJ Product"))
         image_url = self._first_image(self._pick(item, "productImage", "productImageSet", "image", "imageUrl", "productImages", "variantImage"))
         variants_raw = self._pick(item, "variants", "variantList", "variantsList", "productVariantList") or []
         variants = [self._map_supplier_variant(variant, name, image_url) for variant in variants_raw if isinstance(variant, dict)]
@@ -462,7 +462,7 @@ class SupplierService:
         return SupplierProductVariantRead(
             supplier_variant_id=str(self._pick(item, "vid", "variantId", "id", "supplierVariantId") or ""),
             sku=str(self._pick(item, "variantSku", "sku", "variantKey", "variantNameEn") or "CJ-VARIANT"),
-            name=self._pick(item, "variantName", "variantNameEn", "variantKey", "name", "nameEn") or fallback_name,
+            name=self._english_first(item, "variantNameEn", "nameEn", "variantKey", "variantName", "name") or fallback_name,
             options=self._variant_options_from_raw(item, fallback_name),
             price=price,
             cost=self._decimal(self._pick(item, "costPrice", "variantStandard", "standard", "price"), price),
@@ -709,6 +709,21 @@ class SupplierService:
             if key in data and data[key] is not None and data[key] != "":
                 return data[key]
         return None
+
+    def _english_first(self, data: dict[str, Any], *keys: str) -> Any:
+        fallback = None
+        for key in keys:
+            value = self._pick(data, key)
+            if not value:
+                continue
+            if fallback is None:
+                fallback = value
+            if not self._contains_cjk(str(value)):
+                return value
+        return fallback
+
+    def _contains_cjk(self, value: str) -> bool:
+        return bool(re.search(r"[\u3400-\u9fff]", value))
 
     def _first_image(self, value: Any) -> str | None:
         if isinstance(value, str):

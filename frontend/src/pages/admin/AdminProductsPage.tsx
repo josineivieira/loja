@@ -58,6 +58,10 @@ function apiErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
+function hasCjk(value?: string | null) {
+  return /[\u3400-\u9fff]/.test(value ?? "");
+}
+
 export function AdminProductsPage() {
   const language = usePreferencesStore((state) => state.language);
   const [products, setProducts] = useState<Product[]>([]);
@@ -129,9 +133,11 @@ export function AdminProductsPage() {
     setPreviewLoading(product.supplier_product_id);
     try {
       const fullProduct = await previewCjProduct(product.supplier_product_id).catch(() => product);
+      const displayNameSource = hasCjk(fullProduct.name) && !hasCjk(product.name) ? product.name : fullProduct.name;
+      const displayDescriptionSource = fullProduct.description || product.description;
       const images = imageList(fullProduct);
-      const cleanName = presentSupplierName(fullProduct.name, fullProduct.description, language);
-      const cleanDescription = presentSupplierDescription(fullProduct.name, fullProduct.description, language);
+      const cleanName = presentSupplierName(displayNameSource, displayDescriptionSource, language);
+      const cleanDescription = presentSupplierDescription(displayNameSource, displayDescriptionSource, language);
       const variants = fullProduct.variants
         .filter((variant) => variant.supplier_variant_id)
         .slice(0, 40)

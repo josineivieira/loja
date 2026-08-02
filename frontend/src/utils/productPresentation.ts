@@ -20,6 +20,14 @@ const genericDescription: Record<Language, string> = {
 };
 
 const titleRules: Array<{ match: RegExp; title: Record<Language, string> }> = [
+  {
+    match: /solid color flat|walking shoes|comfortable all-match|casual lightweight|flat sneaker|单鞋|鞋/i,
+    title: {
+      en: "Lightweight casual flat shoes",
+      pt: "Sapatilha casual leve",
+      es: "Zapatos planos casuales ligeros",
+    },
+  },
   { match: /notched v-neck|loose midi tunic|decorative wooden buttons/i, title: clothingTitle },
   {
     match: /sleeveless mini skirt|black sleeveless|迷你裙|礼服|vestido/i,
@@ -80,6 +88,14 @@ const titleRules: Array<{ match: RegExp; title: Record<Language, string> }> = [
 ];
 
 const descriptionRules: Array<{ match: RegExp; description: Record<Language, string> }> = [
+  {
+    match: /solid color flat|walking shoes|comfortable all-match|casual lightweight|flat sneaker|单鞋|鞋/i,
+    description: {
+      en: "Lightweight casual flat shoes for daily wear, with simple styling and comfortable slip-on design. Choose the correct color and size before adding to cart.",
+      pt: "Sapatilha casual leve para uso diario, com visual simples e calce pratico. Escolha a cor e o tamanho correto antes de adicionar ao carrinho.",
+      es: "Zapatos planos casuales ligeros para uso diario, con estilo sencillo y diseno practico. Elige el color y la talla correcta antes de agregar al carrito.",
+    },
+  },
   { match: /notched v-neck|loose midi tunic|decorative wooden buttons/i, description: clothingDescription },
   {
     match: /sleeveless mini skirt|black sleeveless|迷你裙|礼服|vestido/i,
@@ -180,11 +196,16 @@ export function cleanSupplierText(value?: string | null) {
     .trim();
 }
 
+function containsCjk(value: string) {
+  return /[\u3400-\u9fff]/.test(value);
+}
+
 export function presentSupplierName(name?: string | null, description?: string | null, language: Language = "pt") {
   const source = `${name ?? ""} ${description ?? ""}`;
   const rule = titleRules.find((item) => item.match.test(source));
   if (rule) return rule.title[language];
   const cleaned = cleanSupplierText(name);
+  if (!cleaned || containsCjk(cleaned)) return genericDescription[language].replace(/^Produto importado do catalogo do fornecedor/i, "Produto importado").replace(/^Product imported from the supplier catalog/i, "Imported product").replace(/^Producto importado del catalogo del proveedor/i, "Producto importado");
   return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
 }
 
