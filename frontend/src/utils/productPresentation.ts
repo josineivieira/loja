@@ -1,4 +1,4 @@
-import type { Product } from "../types/catalog";
+import type { Product, ProductVariant } from "../types/catalog";
 import type { Language } from "./i18n";
 
 const clothingTitle: Record<Language, string> = {
@@ -170,4 +170,27 @@ export function variantDisplayName(index: number, language: Language) {
   if (language === "pt") return `Opcao ${index + 1}`;
   if (language === "es") return `Opcion ${index + 1}`;
   return `Option ${index + 1}`;
+}
+
+export function variantOptionSummary(product: Product, variant: ProductVariant, index: number, language: Language) {
+  const options = variant.selected_options ?? {};
+  const entries = Object.entries(options).filter(([, value]) => value);
+  if (entries.length) {
+    return {
+      title: entries.map(([, value]) => value).join(" / "),
+      detail: entries.map(([name, value]) => `${name}: ${value}`).join(" - "),
+    };
+  }
+  const imageGroups = Array.from(new Set(product.variants.map((item) => item.image_url).filter(Boolean)));
+  const colorIndex = variant.image_url ? imageGroups.indexOf(variant.image_url) : -1;
+  const sameImageBefore = product.variants.slice(0, index + 1).filter((item) => item.image_url && item.image_url === variant.image_url).length;
+  const title =
+    colorIndex >= 0
+      ? `${language === "pt" ? "Cor/Imagem" : language === "es" ? "Color/Imagen" : "Color/Image"} ${colorIndex + 1}`
+      : variantDisplayName(index, language);
+  const detail =
+    imageGroups.length > 1
+      ? `${language === "pt" ? "Tamanho/variante" : language === "es" ? "Talla/variante" : "Size/variant"} ${sameImageBefore || index + 1}`
+      : variant.sku;
+  return { title, detail };
 }

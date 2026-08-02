@@ -2,6 +2,7 @@ export type ProductVariant = {
   id: string;
   sku: string;
   supplier_variant_id?: string | null;
+  selected_options?: Record<string, string>;
   price: string;
   cost: string;
   stock: number;

@@ -8,7 +8,7 @@ from sqlalchemy import Select, asc, desc, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.category import Category
-from app.models.product import Product, ProductVariant
+from app.models.product import Product, ProductOptionValue, ProductVariant, VariantOptionValue
 
 
 class CategoryRepository:
@@ -43,7 +43,17 @@ class ProductRepository:
         self.db = db
 
     def _base_query(self) -> Select[tuple[Product]]:
-        return select(Product).options(selectinload(Product.variants), selectinload(Product.images)).where(Product.deleted_at.is_(None))
+        return (
+            select(Product)
+            .options(
+                selectinload(Product.variants)
+                .selectinload(ProductVariant.option_values)
+                .selectinload(VariantOptionValue.option_value)
+                .selectinload(ProductOptionValue.option),
+                selectinload(Product.images),
+            )
+            .where(Product.deleted_at.is_(None))
+        )
 
     def list(
         self,

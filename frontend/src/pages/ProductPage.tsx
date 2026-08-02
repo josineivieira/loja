@@ -15,7 +15,7 @@ import type { ShippingQuote } from "../types/checkout";
 import type { Review } from "../types/engagement";
 import { formatMoney } from "../utils/currency";
 import { t } from "../utils/i18n";
-import { productDisplayDescription, productDisplayName, variantDisplayName } from "../utils/productPresentation";
+import { productDisplayDescription, productDisplayName, variantOptionSummary } from "../utils/productPresentation";
 
 export function ProductPage() {
   const { slug } = useParams();
@@ -213,20 +213,33 @@ export function ProductPage() {
               ) : null}
             </div>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              {visibleVariants.map((variant, index) => (
-                <button key={variant.id} className={`grid grid-cols-[48px_1fr] gap-3 rounded-md border p-3 text-left text-sm ${selectedVariant?.id === variant.id ? "border-primary bg-blue-50" : "border-slate-200"}`} onClick={() => selectVariant(variant)}>
-                  <span className="h-12 w-12 overflow-hidden rounded-md bg-mist">
-                    {variant.image_url ? <img src={variant.image_url} alt="" className="h-full w-full object-cover" /> : null}
-                  </span>
-                  <span>
-                    <span className="block font-semibold">{variantDisplayName(index, language)}</span>
-                    <span className="mt-1 block text-xs text-slate-500">{variant.sku}</span>
-                    <span className="mt-1 block text-slate-600">{variant.stock > 0 ? `${variant.stock} ${t("inStockCount", language)}` : t("outOfStock", language)}</span>
-                    {deliveryVariantIds.includes(variant.id) ? <span className="mt-1 block text-xs font-semibold text-emerald-700">Entrega nesse CEP</span> : null}
-                  </span>
-                </button>
-              ))}
+              {visibleVariants.map((variant) => {
+                const option = variantOptionSummary(product, variant, product.variants.indexOf(variant), language);
+                return (
+                  <button key={variant.id} className={`grid grid-cols-[48px_1fr] gap-3 rounded-md border p-3 text-left text-sm ${selectedVariant?.id === variant.id ? "border-primary bg-blue-50" : "border-slate-200"}`} onClick={() => selectVariant(variant)}>
+                    <span className="h-12 w-12 overflow-hidden rounded-md bg-mist">
+                      {variant.image_url ? <img src={variant.image_url} alt="" className="h-full w-full object-cover" /> : null}
+                    </span>
+                    <span>
+                      <span className="block font-semibold">{option.title}</span>
+                      <span className="mt-1 block text-xs text-slate-500">{option.detail}</span>
+                      <span className="mt-1 block text-xs text-slate-500">{variant.sku}</span>
+                      <span className="mt-1 block text-slate-600">{variant.stock > 0 ? `${variant.stock} ${t("inStockCount", language)}` : t("outOfStock", language)}</span>
+                      {deliveryVariantIds.includes(variant.id) ? <span className="mt-1 block text-xs font-semibold text-emerald-700">Entrega nesse CEP</span> : null}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
+            {product.variants.some((variant) => !variant.selected_options || Object.keys(variant.selected_options).length === 0) ? (
+              <p className="mt-3 text-xs leading-5 text-slate-500">
+                {language === "pt"
+                  ? "Algumas variantes antigas ainda nao vieram com cor e tamanho do fornecedor. Para pedidos novos, importe pela CJ novamente ou edite no admin para salvar as opcoes reais."
+                  : language === "es"
+                    ? "Algunas variantes antiguas aun no tienen color y talla del proveedor. Para nuevos productos, importa desde CJ nuevamente o edita en admin."
+                    : "Some older variants do not have supplier color and size saved yet. For new products, import from CJ again or edit them in admin."}
+              </p>
+            ) : null}
           </div>
 
           <div className="mt-8 flex flex-wrap items-center gap-3">

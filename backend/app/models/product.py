@@ -111,6 +111,14 @@ class ProductVariant(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     option_values: Mapped[list["VariantOptionValue"]] = relationship(back_populates="variant", cascade="all, delete-orphan")
     inventory: Mapped["Inventory | None"] = relationship(back_populates="variant", cascade="all, delete-orphan", uselist=False)
 
+    @property
+    def selected_options(self) -> dict[str, str]:
+        return {
+            link.option_value.option.display_name: link.option_value.label
+            for link in self.option_values
+            if link.option_value and link.option_value.option
+        }
+
 
 class VariantOptionValue(TimestampMixin, Base):
     __tablename__ = "variant_option_values"

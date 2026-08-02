@@ -29,6 +29,7 @@ class ProductVariantCreate(BaseModel):
 
 class ProductVariantRead(ProductVariantCreate):
     id: uuid.UUID
+    selected_options: dict[str, str] = Field(default_factory=dict)
 
     class Config:
         from_attributes = True
@@ -58,7 +59,7 @@ class ProductCreate(BaseModel):
     is_bestseller: bool = False
     seo_title: str | None = None
     seo_description: str | None = None
-    variants: list[ProductVariantCreate] = []
+    variants: list[ProductVariantCreate] = Field(default_factory=list)
 
 
 class ProductUpdate(BaseModel):
@@ -97,9 +98,8 @@ class ProductRead(BaseModel):
     is_bestseller: bool
     created_at: datetime
     updated_at: datetime
-    variants: list[ProductVariantRead] = []
-    images: list[ProductImageRead] = []
+    variants: list[ProductVariantRead] = Field(default_factory=list)
+    images: list[ProductImageRead] = Field(default_factory=list)
 
     class Config:
         from_attributes = True
-

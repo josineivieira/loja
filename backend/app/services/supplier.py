@@ -13,7 +13,7 @@ from app.integrations.cj_dropshipping.cj_provider import CJDropshippingProvider
 from app.integrations.cj_dropshipping.exceptions import CJDropshippingError
 from app.integrations.cj_dropshipping.manual_provider import ManualSupplierProvider
 from app.models.order import Order
-from app.models.product import Product, ProductImage, ProductVariant
+from app.models.product import Product, ProductImage, ProductOption, ProductOptionValue, ProductVariant, VariantOptionValue
 from app.models.supplier import Supplier
 from app.repositories.supplier import SupplierRepository
 from app.schemas.supplier import (
@@ -123,19 +123,21 @@ class SupplierService:
         )
         self.repo.db.add(product)
         self.repo.db.flush()
+        option_cache: dict[tuple[str, str], ProductOptionValue] = {}
         for index, variant_data in enumerate(variants):
-            self.repo.db.add(
-                ProductVariant(
-                    product_id=product.id,
-                    sku=self._unique_sku(f"{variant_data.sku.upper()}-CJ", ProductVariant),
-                    supplier_variant_id=variant_data.supplier_variant_id,
-                    price=variant_data.price,
-                    cost=variant_data.cost,
-                    stock=variant_data.stock,
-                    image_url=variant_data.image_url or payload.image_url,
-                    status="active",
-                )
+            variant = ProductVariant(
+                product_id=product.id,
+                sku=self._unique_sku(f"{variant_data.sku.upper()}-CJ", ProductVariant),
+                supplier_variant_id=variant_data.supplier_variant_id,
+                price=variant_data.price,
+                cost=variant_data.cost,
+                stock=variant_data.stock,
+                image_url=variant_data.image_url or payload.image_url,
+                status="active",
             )
+            self.repo.db.add(variant)
+            self.repo.db.flush()
+            self._attach_variant_options(product, variant, variant_data.name or variant_data.sku, index, option_cache)
             if index == 0:
                 product.sale_price = variant_data.price
                 product.cost_price = variant_data.cost
@@ -453,12 +455,77 @@ class SupplierService:
         return SupplierProductVariantRead(
             supplier_variant_id=str(self._pick(item, "vid", "variantId", "id", "supplierVariantId") or ""),
             sku=str(self._pick(item, "variantSku", "sku", "variantKey", "variantNameEn") or "CJ-VARIANT"),
-            name=self._pick(item, "variantName", "variantNameEn", "name") or fallback_name,
+            name=self._pick(item, "variantName", "variantNameEn", "variantKey", "name") or fallback_name,
             price=price,
             cost=self._decimal(self._pick(item, "costPrice", "variantStandard", "standard", "price"), price),
             stock=int(self._decimal(self._pick(item, "stock", "inventory", "sellableQuantity"), Decimal("999"))),
             image_url=self._first_image(self._pick(item, "variantImage", "image", "imageUrl")) or fallback_image,
         )
+
+    def _attach_variant_options(
+        self,
+        product: Product,
+        variant: ProductVariant,
+        raw_name: str,
+        index: int,
+        option_cache: dict[tuple[str, str], ProductOptionValue],
+    ) -> None:
+        parsed = self._parse_variant_options(raw_name, index)
+        for option_name, label in parsed.items():
+            key = (option_name, label.lower())
+            option_value = option_cache.get(key)
+            if not option_value:
+                option = next((item for item in product.options if item.name == option_name), None)
+                if not option:
+                    option = ProductOption(
+                        product_id=product.id,
+                        name=option_name,
+                        display_name="Cor" if option_name == "color" else "Tamanho" if option_name == "size" else "Opcao",
+                        sort_order=0 if option_name == "color" else 1,
+                    )
+                    self.repo.db.add(option)
+                    self.repo.db.flush()
+                    product.options.append(option)
+                option_value = ProductOptionValue(option_id=option.id, value=label.lower(), label=label, sort_order=len(option.values))
+                self.repo.db.add(option_value)
+                self.repo.db.flush()
+                option.values.append(option_value)
+                option_cache[key] = option_value
+            self.repo.db.add(VariantOptionValue(variant_id=variant.id, option_value_id=option_value.id))
+
+    def _parse_variant_options(self, raw_name: str, index: int) -> dict[str, str]:
+        value = unescape(raw_name or "")
+        tokens = [item.strip() for item in re.split(r"[,/|;:_-]+", value) if item.strip()]
+        colors = {
+            "white": "Branco",
+            "beige": "Bege",
+            "black": "Preto",
+            "blue": "Azul",
+            "green": "Verde",
+            "pink": "Rosa",
+            "red": "Vermelho",
+            "orange": "Laranja",
+            "yellow": "Amarelo",
+            "purple": "Roxo",
+            "gray": "Cinza",
+            "grey": "Cinza",
+            "wine": "Vinho",
+            "khaki": "Caqui",
+            "brown": "Marrom",
+        }
+        sizes = {"xxs", "xs", "s", "m", "l", "xl", "xxl", "xxxl", "2xl", "3xl", "4xl", "5xl"}
+        parsed: dict[str, str] = {}
+        for token in tokens:
+            normalized = token.lower().strip()
+            if normalized in colors:
+                parsed["color"] = colors[normalized]
+            elif normalized in sizes or re.fullmatch(r"\d{2,3}", normalized):
+                parsed["size"] = token.upper()
+        if not parsed and tokens and not raw_name.upper().startswith("CJ"):
+            parsed["option"] = tokens[-1][:40]
+        if not parsed:
+            parsed["option"] = f"Opcao {index + 1}"
+        return parsed
 
     def _pick(self, data: dict[str, Any], *keys: str) -> Any:
         for key in keys:
