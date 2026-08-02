@@ -23,7 +23,7 @@ class AliExpressProvider:
         errors: list[str] = []
         for keyword in self._query_keywords(query):
             try:
-                data = self.client.top_method(
+                data = self.client.ds_method(
                     "aliexpress.ds.recommend.feed.get",
                     {
                         "target_language": "pt_BR",
@@ -33,7 +33,6 @@ class AliExpressProvider:
                         "page_no": 1,
                         "page_size": 50,
                     },
-                    require_session=False,
                 )
                 responses.extend(self._filter_products(self._product_rows(data), keyword))
             except AliExpressError as exc:
@@ -55,7 +54,7 @@ class AliExpressProvider:
         errors: list[str] = []
         for method in ("aliexpress.ds.product.get", "aliexpress.ds.product.simplequery"):
             try:
-                data = self.client.top_method(method, payload, require_session=False)
+                data = self.client.ds_method(method, payload)
             except AliExpressError as exc:
                 errors.append(str(exc))
                 continue
@@ -79,7 +78,7 @@ class AliExpressProvider:
         errors: list[str] = []
         for method in ("aliexpress.ds.freight.query", "aliexpress.logistics.buyer.freight.get"):
             try:
-                data = self.client.top_method(method, request_payload)
+                data = self.client.ds_method(method, request_payload)
             except AliExpressError as exc:
                 errors.append(str(exc))
                 continue
@@ -92,7 +91,7 @@ class AliExpressProvider:
         payload = self._to_order_payload(order_payload)
         if order_payload.get("sandbox"):
             return {"supplier_status": "supplier_submitted", "supplier_order_id": None, "copyable_payload": payload, "provider_response": {"sandbox": True}}
-        data = self.client.top_method("aliexpress.ds.order.create", payload)
+        data = self.client.ds_method("aliexpress.ds.order.create", payload)
         supplier_order_id = self._first_present(data, "order_id", "orderId", "id")
         result = data.get("result")
         if not supplier_order_id and isinstance(result, dict):
@@ -105,11 +104,11 @@ class AliExpressProvider:
         }
 
     def get_supplier_order(self, supplier_order_id: str) -> dict[str, Any]:
-        data = self.client.top_method("aliexpress.ds.order.get", {"order_id": supplier_order_id})
+        data = self.client.ds_method("aliexpress.ds.order.get", {"order_id": supplier_order_id})
         return {"order": self._normalize_order(data), "raw": data}
 
     def get_tracking(self, supplier_order_id: str) -> dict[str, Any]:
-        data = self.client.top_method("aliexpress.ds.order.tracking.get", {"order_id": supplier_order_id})
+        data = self.client.ds_method("aliexpress.ds.order.tracking.get", {"order_id": supplier_order_id})
         return {"tracking": self._normalize_tracking(data), "raw": data}
 
     def _to_order_payload(self, order_payload: dict[str, Any]) -> dict[str, Any]:
