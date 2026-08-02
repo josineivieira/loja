@@ -15,10 +15,16 @@ export function AdminIntegrationsPage() {
   const [trackingNumber, setTrackingNumber] = useState("");
   const [carrier, setCarrier] = useState("CJPacket");
   const [status, setStatus] = useState<IntegrationStatus | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
 
   useEffect(() => {
-    listSupplierOrders().then(setOrders);
-    getIntegrationStatus().then(setStatus);
+    listSupplierOrders().then(setOrders).catch(() => setOrders([]));
+    getIntegrationStatus()
+      .then((data) => {
+        setStatus(data);
+        setStatusError(null);
+      })
+      .catch(() => setStatusError("Unable to load integration status. Redeploy backend and confirm your admin token is valid."));
   }, []);
 
   async function loadPayload(orderNumber: string) {
@@ -44,13 +50,16 @@ export function AdminIntegrationsPage() {
           <div className="flex items-start gap-3">
             <PackageCheck className="mt-1 h-5 w-5 text-primary" />
             <div>
-              <h2 className="font-semibold">Manual CJ Dropshipping workflow</h2>
+              <h2 className="font-semibold">{status?.supplier_provider === "cj" ? "Automated CJ Dropshipping workflow" : "Manual CJ Dropshipping workflow"}</h2>
               <p className="mt-1 text-sm leading-6 text-slate-600">
-                Orders are prepared as copyable supplier payloads. The provider can later be swapped for CJ automation without changing checkout or order logic.
+                {status?.supplier_provider === "cj"
+                  ? "Orders can be submitted to CJ when each product variant has a real CJ supplier variant ID."
+                  : "Orders are prepared as copyable supplier payloads. Switch SUPPLIER_PROVIDER=cj in Render to enable CJ automation."}
               </p>
             </div>
           </div>
         </section>
+        {statusError ? <div className="mb-5 rounded-md bg-red-50 p-3 text-sm text-danger">{statusError}</div> : null}
         {status ? (
           <section className="mb-5 grid gap-3 md:grid-cols-4">
             <IntegrationCard label="Stripe secret" active={status.stripe_secret_configured} />
@@ -58,7 +67,14 @@ export function AdminIntegrationsPage() {
             <IntegrationCard label={`Supplier: ${status.supplier_provider}`} active={status.supplier_provider === "cj" ? status.cj_configured : true} />
             <IntegrationCard label={`Email: ${status.email_provider}`} active={status.email_provider === "log" || status.email_configured} />
           </section>
-        ) : null}
+        ) : (
+          <section className="mb-5 grid gap-3 md:grid-cols-4">
+            <IntegrationCard label="Stripe secret" active={false} />
+            <IntegrationCard label="Stripe webhook" active={false} />
+            <IntegrationCard label="Supplier status" active={false} />
+            <IntegrationCard label="Email status" active={false} />
+          </section>
+        )}
         <AdminTable columns={["Order", "Customer", "Total", "Supplier", "Action"]}>
           {orders.map((order) => (
             <tr key={order.id}>
