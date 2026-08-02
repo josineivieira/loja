@@ -70,6 +70,21 @@ export async function createAdminProduct(payload: {
   return data;
 }
 
+export async function updateAdminProduct(
+  productId: string,
+  payload: {
+    name?: string;
+    short_description?: string;
+    description?: string;
+    sale_price?: number;
+    cost_price?: number;
+    status?: string;
+  },
+) {
+  const { data } = await api.patch<Product>(`/admin/products/${productId}`, payload);
+  return data;
+}
+
 export async function searchCjProducts(query: string) {
   const { data } = await api.get<SupplierProduct[]>("/admin/supplier/cj/products", { params: { q: query } });
   return data;

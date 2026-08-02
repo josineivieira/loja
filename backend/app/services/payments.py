@@ -9,6 +9,7 @@ from app.integrations.payment.stripe_provider import StripePaymentProvider
 from app.models.order import Payment, PaymentEvent
 from app.repositories.payments import PaymentRepository
 from app.schemas.payment import PaymentSessionResponse
+from app.services.supplier import SupplierService
 
 
 class PaymentService:
@@ -88,6 +89,11 @@ class PaymentService:
             return
         payment = self.repo.get_payment_by_session(checkout_session_id) if checkout_session_id else None
         self.repo.mark_paid(order, payment, transaction_id, event)
+        try:
+            SupplierService(self.db).get_copyable_payload(order.order_number)
+        except Exception:
+            order.supplier_status = "supplier_pending"
+            self.db.commit()
 
     def _handle_payment_failed(self, obj: dict[str, Any], event: dict[str, Any]) -> None:
         order_number = obj.get("metadata", {}).get("order_number")
@@ -101,4 +107,3 @@ class PaymentService:
         if checkout_session_id:
             payment = self.repo.get_payment_by_session(checkout_session_id)
         self.repo.mark_failed(order, payment, event, obj.get("last_payment_error", {}).get("message"))
-

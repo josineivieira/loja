@@ -96,7 +96,7 @@ class ProductRepository:
         return self.db.scalar(self._base_query().where(Product.slug == slug))
 
     def get(self, product_id: uuid.UUID) -> Product | None:
-        return self.db.get(Product, product_id)
+        return self.db.scalar(self._base_query().where(Product.id == product_id))
 
     def create(self, product: Product, variants: list[ProductVariant]) -> Product:
         self.db.add(product)
@@ -114,6 +114,12 @@ class ProductRepository:
             return None
         for key, value in values.items():
             setattr(product, key, value)
+        if "sale_price" in values:
+            for variant in product.variants:
+                variant.price = values["sale_price"]
+        if "cost_price" in values:
+            for variant in product.variants:
+                variant.cost = values["cost_price"]
         self.db.commit()
         self.db.refresh(product)
         return product

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 
 import { AdminTable } from "../../components/AdminTable";
-import { createAdminProduct, importCjProduct, listAdminProducts, searchCjProducts } from "../../services/adminService";
+import { createAdminProduct, importCjProduct, listAdminProducts, searchCjProducts, updateAdminProduct } from "../../services/adminService";
 import type { Product, SupplierProduct, SupplierProductVariant } from "../../types/catalog";
 import { formatMoney } from "../../utils/currency";
 
@@ -23,6 +23,8 @@ export function AdminProductsPage() {
   const [cjProducts, setCjProducts] = useState<SupplierProduct[]>([]);
   const [cjLoading, setCjLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ name: "", sale_price: "", cost_price: "", short_description: "", description: "" });
 
   useEffect(() => {
     listAdminProducts().then(setProducts);
@@ -87,6 +89,36 @@ export function AdminProductsPage() {
     }
   }
 
+  function startEdit(product: Product) {
+    setEditingId(product.id);
+    setEditForm({
+      name: product.name,
+      sale_price: product.sale_price,
+      cost_price: product.cost_price ?? "0",
+      short_description: product.short_description ?? "",
+      description: product.description ?? "",
+    });
+  }
+
+  async function saveEdit(event: FormEvent) {
+    event.preventDefault();
+    if (!editingId) return;
+    setError(null);
+    try {
+      const updated = await updateAdminProduct(editingId, {
+        name: editForm.name,
+        sale_price: Number(editForm.sale_price),
+        cost_price: Number(editForm.cost_price),
+        short_description: editForm.short_description,
+        description: editForm.description,
+      });
+      setProducts((items) => items.map((item) => (item.id === updated.id ? updated : item)));
+      setEditingId(null);
+    } catch {
+      setError("Nao foi possivel atualizar o produto.");
+    }
+  }
+
   return (
     <div>
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
@@ -138,7 +170,20 @@ export function AdminProductsPage() {
           <button className="rounded-md bg-primary px-4 text-sm font-semibold text-white">Save</button>
         </form>
       ) : null}
-      <AdminTable columns={["Product", "SKU", "Price", "Stock", "Status"]}>
+      {editingId ? (
+        <form onSubmit={saveEdit} className="mb-5 grid gap-3 rounded-lg border border-slate-200 bg-white p-5 shadow-sm md:grid-cols-6">
+          <input className="h-10 rounded-md border border-slate-200 px-3 text-sm md:col-span-2" placeholder="Product name" value={editForm.name} onChange={(event) => setEditForm({ ...editForm, name: event.target.value })} required />
+          <input className="h-10 rounded-md border border-slate-200 px-3 text-sm" placeholder="Your sale price" value={editForm.sale_price} onChange={(event) => setEditForm({ ...editForm, sale_price: event.target.value })} required />
+          <input className="h-10 rounded-md border border-slate-200 px-3 text-sm" placeholder="CJ cost" value={editForm.cost_price} onChange={(event) => setEditForm({ ...editForm, cost_price: event.target.value })} required />
+          <input className="h-10 rounded-md border border-slate-200 px-3 text-sm md:col-span-2" placeholder="Short description" value={editForm.short_description} onChange={(event) => setEditForm({ ...editForm, short_description: event.target.value })} />
+          <textarea className="min-h-24 rounded-md border border-slate-200 px-3 py-2 text-sm md:col-span-5" placeholder="Full description" value={editForm.description} onChange={(event) => setEditForm({ ...editForm, description: event.target.value })} />
+          <div className="flex gap-2">
+            <button className="rounded-md bg-primary px-4 text-sm font-semibold text-white">Save</button>
+            <button type="button" className="rounded-md border border-slate-200 px-4 text-sm font-semibold" onClick={() => setEditingId(null)}>Cancel</button>
+          </div>
+        </form>
+      ) : null}
+      <AdminTable columns={["Product", "SKU", "Price", "Stock", "Status", "Action"]}>
         {products.map((product) => (
           <tr key={product.id}>
             <td className="px-4 py-3 font-semibold">{product.name}</td>
@@ -146,6 +191,9 @@ export function AdminProductsPage() {
             <td className="px-4 py-3">{formatMoney(Number(product.sale_price), product.currency)}</td>
             <td className="px-4 py-3">{product.variants.reduce((total, variant) => total + variant.stock, 0)}</td>
             <td className="px-4 py-3"><Status value={product.status} /></td>
+            <td className="px-4 py-3">
+              <button className="rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold" onClick={() => startEdit(product)}>Edit</button>
+            </td>
           </tr>
         ))}
       </AdminTable>

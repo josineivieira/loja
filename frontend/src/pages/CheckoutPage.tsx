@@ -54,7 +54,7 @@ export function CheckoutPage() {
   );
 
   async function recalculate(address?: CheckoutAddressForm, code = couponCode, shipping = shippingMethodCode) {
-    if (payloadItems.length === 0) return;
+    if (payloadItems.length === 0) return false;
     setLoading(true);
     setError(null);
     try {
@@ -67,8 +67,12 @@ export function CheckoutPage() {
       });
       setCalculation(data);
       if (!shipping && data.totals.shipping_method_code) setShippingMethodCode(data.totals.shipping_method_code);
+      return true;
     } catch (err) {
+      setCalculation(null);
+      setShippingMethodCode(undefined);
       setError(err instanceof Error ? err.message : "Unable to calculate checkout.");
+      return false;
     } finally {
       setLoading(false);
     }
@@ -118,8 +122,10 @@ export function CheckoutPage() {
     if (step === 2) {
       const isValid = await form.trigger();
       if (!isValid) return;
-      await recalculate(form.getValues());
+      const calculated = await recalculate(form.getValues());
+      if (!calculated) return;
     }
+    if (step === 3 && !shippingMethodCode) return;
     setStep((value) => value + 1);
   }
 
@@ -153,7 +159,11 @@ export function CheckoutPage() {
         setStep(2);
         return;
       }
-      await recalculate(form.getValues());
+      const calculated = await recalculate(form.getValues());
+      if (!calculated) {
+        setStep(2);
+        return;
+      }
     }
     if (targetStep >= 4 && !shippingMethodCode) {
       setStep(3);
