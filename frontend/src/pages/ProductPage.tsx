@@ -144,7 +144,7 @@ export function ProductPage() {
             <div className="rounded-lg border border-slate-200 p-4">
               <Truck className="h-5 w-5 text-primary" />
               <p className="mt-2 font-semibold">International shipping</p>
-              <p className="mt-1 text-slate-600">Estimated 7-18 business days.</p>
+              <p className="mt-1 text-slate-600">Delivery estimate is calculated at checkout by destination.</p>
             </div>
             <div className="rounded-lg border border-slate-200 p-4">
               <ShieldCheck className="h-5 w-5 text-primary" />

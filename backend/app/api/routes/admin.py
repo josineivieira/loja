@@ -159,3 +159,8 @@ def mark_supplier_submitted(order_number: str, payload: SupplierSubmissionUpdate
 @router.post("/supplier/orders/{order_number}/tracking", response_model=OrderRead)
 def add_supplier_tracking(order_number: str, payload: SupplierTrackingUpdate, _: AdminUser, db: Annotated[Session, Depends(get_db)]) -> OrderRead:
     return SupplierService(db).add_tracking(order_number, payload)
+
+
+@router.post("/supplier/orders/{order_number}/sync", response_model=OrderRead)
+def sync_supplier_order(order_number: str, _: AdminUser, db: Annotated[Session, Depends(get_db)]) -> OrderRead:
+    return SupplierService(db).sync_supplier_order(order_number)

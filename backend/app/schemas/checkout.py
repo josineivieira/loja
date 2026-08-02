@@ -123,12 +123,18 @@ class OrderRead(BaseModel):
     payment_status: str
     fulfillment_status: str
     supplier_status: str
+    supplier_order_id: str | None = None
     subtotal_amount: Decimal
     discount_amount: Decimal
     shipping_amount: Decimal
     tax_amount: Decimal
     total_amount: Decimal
     currency: str
+    shipping_method_code: str | None = None
+    shipping_method_name: str | None = None
+    shipping_min_days: int | None = None
+    shipping_max_days: int | None = None
+    shipping_tracking_available: bool = True
     created_at: datetime
     items: list[OrderItemRead] = []
 

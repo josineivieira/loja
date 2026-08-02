@@ -80,6 +80,11 @@ export type Order = {
   tax_amount: string;
   total_amount: string;
   currency: string;
+  shipping_method_code?: string | null;
+  shipping_method_name?: string | null;
+  shipping_min_days?: number | null;
+  shipping_max_days?: number | null;
+  shipping_tracking_available?: boolean;
   created_at: string;
   items: CheckoutLine[];
 };

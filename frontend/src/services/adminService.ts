@@ -174,6 +174,7 @@ export function getSupplierPayload(orderNumber: string) {
       shippingAddress: { country: "US", state: "CA", city: "San Francisco", addressLine1: "1 Market Street", postalCode: "94105" },
       items: demoOrder.items.map((item) => ({ variantSku: item.variant_sku, quantity: item.quantity })),
       shippingMethod: "standard",
+      shippingMethodName: "Standard Shipping",
     },
   };
   return withFallback(async () => (await api.get<SupplierOrderPayload>(`/admin/supplier/orders/${orderNumber}/payload`)).data, fallback);
@@ -204,5 +205,12 @@ export async function addSupplierTracking(orderNumber: string, trackingNumber: s
         })
       ).data,
     { ...demoAdmin.orders[0], status: "shipped", fulfillment_status: "shipped", supplier_status: "shipped" } as Order,
+  );
+}
+
+export async function syncSupplierOrder(orderNumber: string) {
+  return withFallback(
+    async () => (await api.post<Order>(`/admin/supplier/orders/${orderNumber}/sync`)).data,
+    { ...demoAdmin.orders[0], supplier_status: "in_transit", fulfillment_status: "in_transit" } as Order,
   );
 }

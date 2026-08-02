@@ -64,6 +64,10 @@ class Order(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     exchange_rate: Mapped[Decimal] = mapped_column(Numeric(12, 6), default=1)
     coupon_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
     shipping_method_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    shipping_method_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    shipping_min_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    shipping_max_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    shipping_tracking_available: Mapped[bool] = mapped_column(Boolean, default=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     items: Mapped[list["OrderItem"]] = relationship(back_populates="order", cascade="all, delete-orphan")

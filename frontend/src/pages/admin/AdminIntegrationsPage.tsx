@@ -2,7 +2,7 @@ import { Clipboard, PackageCheck, Truck } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { AdminTable } from "../../components/AdminTable";
-import { addSupplierTracking, getIntegrationStatus, getSupplierPayload, listSupplierOrders, markSupplierSubmitted } from "../../services/adminService";
+import { addSupplierTracking, getIntegrationStatus, getSupplierPayload, listSupplierOrders, markSupplierSubmitted, syncSupplierOrder } from "../../services/adminService";
 import type { IntegrationStatus, SupplierOrderPayload } from "../../types/admin";
 import type { Order } from "../../types/checkout";
 import { PageTitle, Status } from "./AdminProductsPage";
@@ -40,6 +40,13 @@ export function AdminIntegrationsPage() {
   async function submitTracking() {
     if (!selected || !trackingNumber || !carrier) return;
     await addSupplierTracking(selected.order_number, trackingNumber, carrier);
+  }
+
+  async function syncSelectedOrder() {
+    if (!selected) return;
+    await syncSupplierOrder(selected.order_number);
+    setOrders(await listSupplierOrders());
+    setSelected(await getSupplierPayload(selected.order_number));
   }
 
   return (
@@ -102,6 +109,9 @@ export function AdminIntegrationsPage() {
               <p className="text-sm text-slate-500">Order</p>
               <p className="font-semibold">{selected.order_number}</p>
             </div>
+            <button className="rounded-md border border-slate-200 px-4 py-2 text-sm font-semibold" onClick={syncSelectedOrder}>
+              Sync CJ status and tracking
+            </button>
             <button
               className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white"
               onClick={() => navigator.clipboard.writeText(JSON.stringify(selected.copyable_payload, null, 2))}

@@ -121,19 +121,24 @@ class SupplierService:
                 for item in order.items
             ],
             "shippingMethod": order.shipping_method_code,
+            "shippingMethodName": order.shipping_method_name,
             "notes": order.notes,
         }
-        try:
-            provider_result = self.provider.create_supplier_order(copyable_payload)
-        except CJDropshippingError as exc:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-        order.supplier_payload = provider_result["copyable_payload"]
-        if provider_result.get("supplier_order_id"):
-            order.supplier_order_id = provider_result["supplier_order_id"]
-            order.supplier_status = provider_result.get("supplier_status", "supplier_confirmed")
-            order.fulfillment_status = "supplier_confirmed"
-            self.repo.add_history(order, order.supplier_status, "Supplier order submitted through CJ API")
-        self.repo.commit()
+        if settings.supplier_provider.lower() == "cj" and not order.supplier_order_id:
+            try:
+                provider_result = self.provider.create_supplier_order(copyable_payload)
+            except CJDropshippingError as exc:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+            order.supplier_payload = provider_result["copyable_payload"]
+            if provider_result.get("supplier_order_id"):
+                order.supplier_order_id = provider_result["supplier_order_id"]
+                order.supplier_status = provider_result.get("supplier_status", "supplier_confirmed")
+                order.fulfillment_status = "supplier_confirmed"
+                self.repo.add_history(order, order.supplier_status, "Supplier order submitted through CJ API")
+            self.repo.commit()
+        elif not order.supplier_payload:
+            order.supplier_payload = copyable_payload
+            self.repo.commit()
         return SupplierOrderPayloadRead(
             order_number=order.order_number,
             customer_email=order.customer_email,
@@ -152,6 +157,51 @@ class SupplierService:
         order.supplier_status = "supplier_confirmed"
         order.fulfillment_status = "supplier_confirmed"
         self.repo.add_history(order, "supplier_confirmed", payload.note or "Manual supplier order registered")
+        self.repo.commit()
+        return order
+
+    def sync_supplier_order(self, order_number: str) -> Order:
+        order = self._get_order(order_number)
+        if not order.supplier_order_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Order does not have a CJ supplier order ID yet")
+        try:
+            supplier_result = self.provider.get_supplier_order(order.supplier_order_id)
+        except CJDropshippingError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+        supplier_order = supplier_result.get("order", {})
+        supplier_status = self._normalize_order_status(str(supplier_order.get("supplier_status") or order.supplier_status))
+        order.supplier_payload = {**(order.supplier_payload or {}), "lastSupplierSync": supplier_result.get("raw")}
+        order.supplier_status = supplier_status
+        order.fulfillment_status = supplier_status if supplier_status in {"shipped", "in_transit", "delivered"} else order.fulfillment_status
+        if supplier_status in {"shipped", "in_transit", "delivered"}:
+            order.status = supplier_status
+
+        if supplier_order.get("min_days"):
+            order.shipping_min_days = supplier_order["min_days"]
+        if supplier_order.get("max_days"):
+            order.shipping_max_days = supplier_order["max_days"]
+
+        tracking_number = supplier_order.get("tracking_number")
+        if tracking_number:
+            shipment = self.repo.get_or_create_shipment(order)
+            shipment.tracking_number = tracking_number
+            shipment.carrier = supplier_order.get("carrier") or order.shipping_method_name
+            shipment.supplier_order_id = order.supplier_order_id
+            shipment.status = supplier_status
+            events = supplier_order.get("events") or []
+            if not events:
+                events = self._tracking_events(tracking_number)
+            if not events:
+                events = [{"status": supplier_status, "location": None, "description": "Tracking number received from CJ."}]
+            for event in events[-10:]:
+                self.repo.add_tracking_event(
+                    shipment,
+                    self._normalize_order_status(str(event.get("status") or supplier_status)),
+                    event.get("location"),
+                    str(event.get("description") or "CJ tracking update."),
+                )
+        self.repo.add_history(order, supplier_status, "Supplier order synchronized from CJ")
         self.repo.commit()
         return order
 
@@ -290,3 +340,23 @@ class SupplierService:
     def _sale_price(self, cost: Decimal) -> Decimal:
         value = (cost * Decimal(str(settings.cj_price_markup_multiplier))) + Decimal(str(settings.cj_price_markup_fixed))
         return value.quantize(Decimal("0.01"))
+
+    def _tracking_events(self, tracking_number: str) -> list[dict[str, Any]]:
+        try:
+            result = self.provider.get_tracking(tracking_number)
+        except CJDropshippingError:
+            return []
+        tracking = result.get("tracking", {})
+        return tracking.get("events") or []
+
+    def _normalize_order_status(self, value: str) -> str:
+        cleaned = value.lower().replace(" ", "_").replace("-", "_")
+        if cleaned in {"delivered", "completed", "signed", "received"}:
+            return "delivered"
+        if cleaned in {"in_transit", "transit", "shipping", "shipped", "dispatched", "sent"}:
+            return "in_transit"
+        if cleaned in {"processing", "confirmed", "paid", "supplier_confirmed", "purchased"}:
+            return "supplier_confirmed"
+        if cleaned in {"cancelled", "canceled", "refunded", "closed"}:
+            return "cancelled"
+        return cleaned[:40] or "supplier_confirmed"

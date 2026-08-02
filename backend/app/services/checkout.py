@@ -82,6 +82,7 @@ class CheckoutService:
 
     def create_order(self, payload: CheckoutCreateOrderRequest, customer_id: str | None = None) -> Order:
         calculation = self.calculate(payload)
+        selected_shipping = self._select_shipping(calculation.totals.shipping_method_code, calculation.shipping_methods)
         order_number = self._make_order_number()
         address = payload.address
         order = Order(
@@ -102,6 +103,10 @@ class CheckoutService:
             exchange_rate=Decimal("1"),
             coupon_code=calculation.totals.coupon_code,
             shipping_method_code=calculation.totals.shipping_method_code,
+            shipping_method_name=selected_shipping.name,
+            shipping_min_days=selected_shipping.min_days,
+            shipping_max_days=selected_shipping.max_days,
+            shipping_tracking_available=selected_shipping.tracking_available,
             notes=address.notes,
         )
         order.items = [

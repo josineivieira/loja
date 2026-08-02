@@ -53,7 +53,8 @@ class CJDropshippingProvider(SupplierProvider):
 
     def get_supplier_order(self, supplier_order_id: str) -> dict[str, Any]:
         result = self.client.get("/api2.0/v1/shopping/order/getOrderDetail", {"orderId": supplier_order_id})
-        return result.get("data") or result
+        data = result.get("data") or result
+        return {"order": self._normalize_supplier_order(data), "raw": result}
 
     def cancel_supplier_order(self, supplier_order_id: str) -> dict[str, Any]:
         result = self.client.post("/api2.0/v1/shopping/order/deleteOrder", {"orderId": supplier_order_id})
@@ -61,7 +62,8 @@ class CJDropshippingProvider(SupplierProvider):
 
     def get_tracking(self, tracking_number: str) -> dict[str, Any]:
         result = self.client.get("/api2.0/v1/logistic/trackInfo", {"trackNumber": tracking_number})
-        return result.get("data") or result
+        data = result.get("data") or result
+        return {"tracking": self._normalize_tracking(data), "raw": result}
 
     def sync_product(self, supplier_product_id: str) -> dict[str, Any]:
         return self.get_product(supplier_product_id)
@@ -95,11 +97,17 @@ class CJDropshippingProvider(SupplierProvider):
             "shippingAddress2": address.get("addressLine2"),
             "shippingCustomerName": f"{address.get('firstName', '')} {address.get('lastName', '')}".strip(),
             "shippingPhone": address.get("phone"),
-            "logisticName": settings.cj_default_logistic_name,
+            "logisticName": self._logistic_name(order_payload.get("shippingMethod"), order_payload.get("shippingMethodName")),
             "fromCountryCode": settings.cj_default_from_country,
             "remark": order_payload.get("notes") or "",
             "products": items,
         }
+
+    def _logistic_name(self, method_code: str | None, method_name: str | None) -> str:
+        name = method_name or method_code or settings.cj_default_logistic_name
+        if name.startswith("CJ "):
+            name = name[3:]
+        return name.replace("cj_", "").replace("_", " ").strip() or settings.cj_default_logistic_name
 
     def _normalize_shipping_quotes(self, data: Any) -> list[dict[str, Any]]:
         if isinstance(data, dict):
@@ -124,6 +132,7 @@ class CJDropshippingProvider(SupplierProvider):
                 {
                     "code": f"cj_{str(name).lower().replace(' ', '_')[:50]}",
                     "name": str(name),
+                    "logistic_name": str(name),
                     "amount": amount_decimal,
                     "currency": str(item.get("currency") or "USD").upper(),
                     "min_days": min_days,
@@ -132,3 +141,60 @@ class CJDropshippingProvider(SupplierProvider):
                 }
             )
         return quotes
+
+    def _normalize_supplier_order(self, data: Any) -> dict[str, Any]:
+        source = data[0] if isinstance(data, list) and data else data
+        if not isinstance(source, dict):
+            return {}
+        tracking_number = self._first_present(source, "trackingNumber", "trackNumber", "logisticTrackingNumber", "shippingNumber")
+        carrier = self._first_present(source, "logisticName", "shippingName", "carrier", "carrierName")
+        status = self._first_present(source, "orderStatus", "status", "logisticStatus", "fulfillmentStatus") or "supplier_confirmed"
+        min_days = self._safe_int(self._first_present(source, "minDeliveryDay", "minDay", "deliveryMin"))
+        max_days = self._safe_int(self._first_present(source, "maxDeliveryDay", "maxDay", "deliveryMax"))
+        return {
+            "supplier_status": str(status),
+            "tracking_number": str(tracking_number) if tracking_number else None,
+            "carrier": str(carrier) if carrier else None,
+            "min_days": min_days,
+            "max_days": max_days,
+            "events": self._normalize_tracking_events(source),
+        }
+
+    def _normalize_tracking(self, data: Any) -> dict[str, Any]:
+        source = data[0] if isinstance(data, list) and data else data
+        if not isinstance(source, dict):
+            return {"events": []}
+        return {
+            "status": self._first_present(source, "status", "logisticStatus", "trackStatus"),
+            "events": self._normalize_tracking_events(source),
+        }
+
+    def _normalize_tracking_events(self, data: dict[str, Any]) -> list[dict[str, Any]]:
+        candidates = self._first_present(data, "events", "trackInfo", "trackInfoList", "trackingList", "logisticsInfo")
+        if not isinstance(candidates, list):
+            return []
+        events: list[dict[str, Any]] = []
+        for item in candidates:
+            if not isinstance(item, dict):
+                continue
+            events.append(
+                {
+                    "status": str(self._first_present(item, "status", "trackStatus", "logisticStatus") or "in_transit"),
+                    "location": self._first_present(item, "location", "trackLocation", "city"),
+                    "description": str(self._first_present(item, "description", "trackDetail", "message", "content") or "CJ tracking update."),
+                }
+            )
+        return events
+
+    def _first_present(self, data: dict[str, Any], *keys: str) -> Any:
+        for key in keys:
+            value = data.get(key)
+            if value is not None and value != "":
+                return value
+        return None
+
+    def _safe_int(self, value: Any) -> int | None:
+        try:
+            return int(value) if value is not None and value != "" else None
+        except Exception:
+            return None
