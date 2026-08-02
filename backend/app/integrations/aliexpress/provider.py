@@ -1,6 +1,7 @@
 from decimal import Decimal
 from typing import Any
 
+from app.core.config import settings
 from app.integrations.aliexpress.client import AliExpressClient
 from app.integrations.aliexpress.exceptions import AliExpressError
 
@@ -22,6 +23,23 @@ class AliExpressProvider:
         responses: list[dict[str, Any]] = []
         errors: list[str] = []
         for keyword in self._query_keywords(query):
+            try:
+                data = self.client.ds_method(
+                    "aliexpress.affiliate.product.query",
+                    {
+                        "app_signature": settings.aliexpress_app_signature,
+                        "keywords": keyword,
+                        "target_language": "pt_BR",
+                        "target_currency": "BRL",
+                        "ship_to_country": "BR",
+                        "page_no": 1,
+                        "page_size": 30,
+                    },
+                    include_access_token=False,
+                )
+                responses.extend(self._filter_products(self._product_rows(data), keyword))
+            except AliExpressError as exc:
+                errors.append(str(exc))
             try:
                 data = self.client.ds_method(
                     "aliexpress.ds.recommend.feed.get",
@@ -144,6 +162,7 @@ class AliExpressProvider:
     def _product_rows(self, data: dict[str, Any]) -> list[dict[str, Any]]:
         source: Any = data
         for key in (
+            "aliexpress_affiliate_product_query_response",
             "aliexpress_ds_recommend_feed_get_response",
             "aliexpress_ds_product_get_response",
             "aliexpress_ds_product_simplequery_response",
@@ -153,7 +172,7 @@ class AliExpressProvider:
             if isinstance(source, dict) and isinstance(source.get(key), (dict, list)):
                 source = source[key]
         if isinstance(source, dict):
-            rows = source.get("products") or source.get("product_list") or source.get("aeopAEProductDisplayDTOList") or source.get("items") or source.get("ae_item_base_info_dto")
+            rows = source.get("products") or source.get("product") or source.get("product_list") or source.get("aeopAEProductDisplayDTOList") or source.get("items") or source.get("ae_item_base_info_dto")
             if isinstance(rows, dict):
                 rows = rows.get("item") or rows.get("product")
             if isinstance(rows, list):

@@ -56,8 +56,8 @@ class AliExpressClient:
         request_payload["sign"] = self._sign(api_path, request_payload)
         return self._post(f"{self.base_url}{api_path}", request_payload)
 
-    def ds_method(self, method: str, payload: dict[str, Any]) -> dict[str, Any]:
-        return self.sync_method(method, payload)
+    def ds_method(self, method: str, payload: dict[str, Any], include_access_token: bool = True) -> dict[str, Any]:
+        return self.sync_method(method, payload, include_access_token=include_access_token)
 
     def sync_method(self, method: str, payload: dict[str, Any], include_access_token: bool = True) -> dict[str, Any]:
         if not self.app_key or not self.app_secret:
