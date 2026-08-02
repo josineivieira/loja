@@ -526,26 +526,47 @@ class SupplierService:
         )
 
     def _normalize_supplier_variants(self, variants: list[SupplierProductVariantRead], product_text: str) -> list[SupplierProductVariantRead]:
-        if len(variants) < 2 or not self._looks_like_footwear(product_text):
+        if len(variants) < 2:
             return variants
-        sizes = self._shoe_sizes_from_text(product_text) or ["36", "37", "38", "39", "40", "41", "42", "43"]
+        if self._looks_like_footwear(product_text):
+            sizes = self._shoe_sizes_from_text(product_text) or ["36", "37", "38", "39", "40", "41", "42", "43"]
+            return self._spread_repeated_sizes_by_group(variants, sizes)
+        if self._looks_like_apparel(product_text):
+            sizes = self._apparel_sizes_from_text(product_text) or ["PP", "P", "M", "G", "GG", "XGG", "EXG", "G4", "G5"]
+            return self._spread_repeated_sizes_by_group(variants, sizes)
+        return variants
+
+    def _spread_repeated_sizes_by_group(self, variants: list[SupplierProductVariantRead], sizes: list[str]) -> list[SupplierProductVariantRead]:
         current_sizes = [variant.options.get("Size") or variant.options.get("size") for variant in variants]
         unique_sizes = {str(size).strip().upper() for size in current_sizes if size}
-        if len(unique_sizes) > 1 and not unique_sizes.issubset({"S", "M", "L"}):
+        generic_sizes = {"PP", "P", "M", "G", "GG", "XGG", "EXG", "G4", "G5", "S", "L", "XL", "XXL", "XXXL", "2XL", "3XL", "4XL", "5XL"}
+        if len(unique_sizes) > 1 and not unique_sizes.issubset(generic_sizes):
             return variants
 
         normalized: list[SupplierProductVariantRead] = []
-        color_positions: dict[str, int] = {}
+        group_positions: dict[str, int] = {}
         for variant in variants:
             options = dict(variant.options)
             color = options.get("Color") or options.get("color") or self._color_key_from_image(variant.image_url) or "Default"
-            color_key = color.lower()
-            index = color_positions.get(color_key, 0)
-            color_positions[color_key] = index + 1
+            group_key = f"{color.lower()}|{variant.image_url or ''}"
+            index = group_positions.get(group_key, 0)
+            group_positions[group_key] = index + 1
             options["Color"] = self._translate_option_label("color", color)
             options["Size"] = sizes[index % len(sizes)]
             normalized.append(variant.model_copy(update={"options": options}))
         return normalized
+
+    def _looks_like_apparel(self, value: str) -> bool:
+        lowered = value.lower()
+        return any(token in lowered for token in ("shirt", "tops", "t-shirt", "blouse", "dress", "skirt", "pants", "shorts", "camisa", "camiseta", "blusa", "vestido", "calca"))
+
+    def _apparel_sizes_from_text(self, value: str) -> list[str]:
+        found = [
+            self._translate_option_label("size", item)
+            for item in re.findall(r"\b(?:XS|S|M|L|XL|XXL|XXXL|2XL|3XL|4XL|5XL)\b", value, flags=re.IGNORECASE)
+        ]
+        ordered = list(dict.fromkeys(found))
+        return ordered if len(ordered) >= 3 else []
 
     def _looks_like_footwear(self, value: str) -> bool:
         lowered = value.lower()
