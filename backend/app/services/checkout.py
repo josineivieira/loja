@@ -4,6 +4,9 @@ from decimal import Decimal, ROUND_HALF_UP
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
+from app.integrations.cj_dropshipping.cj_provider import CJDropshippingProvider
+from app.integrations.cj_dropshipping.exceptions import CJDropshippingError
 from app.models.order import Order, OrderAddress, OrderItem, OrderStatusHistory
 from app.repositories.checkout import CheckoutRepository
 from app.schemas.checkout import (
@@ -24,6 +27,7 @@ class CheckoutService:
     def __init__(self, db: Session):
         self.db = db
         self.repo = CheckoutRepository(db)
+        self.cj = CJDropshippingProvider() if settings.supplier_provider.lower() == "cj" else None
 
     def calculate(self, payload: CheckoutCalculateRequest) -> CheckoutCalculationResponse:
         variant_ids = [item.variant_id for item in payload.items]
@@ -56,7 +60,7 @@ class CheckoutService:
         subtotal = money(sum((line.total_price for line in lines), Decimal("0")))
         discount = self._calculate_discount(payload.coupon_code, subtotal)
         country = payload.address.country.upper() if payload.address else None
-        shipping_methods = self._shipping_quotes(country, subtotal, currency)
+        shipping_methods = self._shipping_quotes(country, subtotal, currency, payload, lines)
         selected_shipping = self._select_shipping(payload.shipping_method_code, shipping_methods)
         tax = Decimal("0.00")
         total = money(subtotal - discount + selected_shipping.amount + tax)
@@ -155,7 +159,10 @@ class CheckoutService:
             return Decimal("0.00")
         return Decimal("0.00")
 
-    def _shipping_quotes(self, country: str | None, subtotal: Decimal, currency: str) -> list[ShippingQuote]:
+    def _shipping_quotes(self, country: str | None, subtotal: Decimal, currency: str, payload: CheckoutCalculateRequest, lines: list[CheckoutLine]) -> list[ShippingQuote]:
+        cj_quotes = self._cj_shipping_quotes(payload, lines, currency)
+        if cj_quotes:
+            return cj_quotes
         quotes: list[ShippingQuote] = []
         for method in self.repo.list_shipping_methods(country):
             amount = Decimal("0.00") if method.free_over_amount and subtotal >= method.free_over_amount else method.amount
@@ -172,6 +179,42 @@ class CheckoutService:
             )
         if not quotes:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Shipping is not available for this destination")
+        return quotes
+
+    def _cj_shipping_quotes(self, payload: CheckoutCalculateRequest, lines: list[CheckoutLine], currency: str) -> list[ShippingQuote]:
+        if not self.cj or not payload.address or not all(line.supplier_variant_id for line in lines):
+            return []
+        try:
+            request_payload = {
+                "startCountryCode": settings.cj_default_from_country,
+                "endCountryCode": payload.address.country.upper(),
+                "shippingZip": payload.address.postal_code,
+                "shippingCountryCode": payload.address.country.upper(),
+                "shippingProvince": payload.address.state,
+                "shippingCity": payload.address.city,
+                "products": [
+                    {"vid": str(line.supplier_variant_id), "quantity": line.quantity}
+                    for line in lines
+                    if line.supplier_variant_id
+                ],
+            }
+            result = self.cj.calculate_shipping(request_payload)
+        except CJDropshippingError:
+            return []
+        quotes = []
+        for item in result.get("quotes", []):
+            amount = money((Decimal(str(item["amount"])) * Decimal(str(settings.cj_shipping_markup_multiplier))) + Decimal(str(settings.cj_shipping_markup_fixed)))
+            quotes.append(
+                ShippingQuote(
+                    code=item["code"],
+                    name=f"CJ {item['name']}",
+                    amount=amount,
+                    currency=currency,
+                    min_days=item["min_days"],
+                    max_days=item["max_days"],
+                    tracking_available=item["tracking_available"],
+                )
+            )
         return quotes
 
     def _select_shipping(self, code: str | None, quotes: list[ShippingQuote]) -> ShippingQuote:

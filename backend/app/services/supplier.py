@@ -48,6 +48,7 @@ class SupplierService:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="CJ product is already imported")
         supplier = self._get_or_create_cj_supplier()
         slug = self._unique_slug(payload.name)
+        sale_price = self._sale_price(payload.cost_price or payload.sale_price)
         product = Product(
             supplier_id=supplier.id,
             category_id=uuid.UUID(payload.category_id) if payload.category_id else None,
@@ -59,7 +60,7 @@ class SupplierService:
             supplier_sku=payload.supplier_sku or payload.sku,
             supplier_product_id=payload.supplier_product_id,
             cost_price=payload.cost_price,
-            sale_price=payload.sale_price,
+            sale_price=sale_price,
             currency="USD",
             status="active",
             featured=False,
@@ -73,7 +74,7 @@ class SupplierService:
                 product_id=product.id,
                 sku=self._unique_sku(f"{payload.sku.upper()}-CJ", ProductVariant),
                 supplier_variant_id=payload.supplier_variant_id,
-                price=payload.sale_price,
+                price=sale_price,
                 cost=payload.cost_price,
                 stock=payload.stock,
                 image_url=payload.image_url,
@@ -285,3 +286,7 @@ class SupplierService:
             return Decimal(str(value).replace("$", "").strip())
         except Exception:
             return fallback
+
+    def _sale_price(self, cost: Decimal) -> Decimal:
+        value = (cost * Decimal(str(settings.cj_price_markup_multiplier))) + Decimal(str(settings.cj_price_markup_fixed))
+        return value.quantize(Decimal("0.01"))

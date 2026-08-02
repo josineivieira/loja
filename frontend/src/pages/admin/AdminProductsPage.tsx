@@ -115,7 +115,8 @@ export function AdminProductsPage() {
                     <h3 className="font-semibold">{product.name}</h3>
                     <p className="mt-1 text-sm text-slate-600">CJ ID: {product.supplier_product_id}</p>
                     <p className="mt-1 text-sm text-slate-600">Variant: {variant?.supplier_variant_id || "missing"} - {variant?.sku}</p>
-                    <p className="mt-1 text-sm text-slate-600">Cost/price: USD {variant?.cost ?? "0"} / USD {variant?.price ?? "0"} - Stock {variant?.stock ?? 0}</p>
+                    <p className="mt-1 text-sm text-slate-600">CJ cost: USD {variant?.cost ?? "0"} - Stock {variant?.stock ?? 0}</p>
+                    <p className="mt-1 text-xs text-slate-500">Sale price is calculated with the backend CJ markup settings.</p>
                   </div>
                   <button className="h-10 rounded-md bg-primary px-4 text-sm font-semibold text-white disabled:bg-slate-300" disabled={!variant?.supplier_variant_id} onClick={() => variant && importProduct(product, variant)}>
                     Import

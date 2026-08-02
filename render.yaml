@@ -55,6 +55,14 @@ services:
         value: CJPacket
       - key: CJ_DEFAULT_FROM_COUNTRY
         value: CN
+      - key: CJ_PRICE_MARKUP_MULTIPLIER
+        value: 2.2
+      - key: CJ_PRICE_MARKUP_FIXED
+        value: 4.9
+      - key: CJ_SHIPPING_MARKUP_MULTIPLIER
+        value: 1.15
+      - key: CJ_SHIPPING_MARKUP_FIXED
+        value: 0
 
   - type: web
     name: nexora-frontend

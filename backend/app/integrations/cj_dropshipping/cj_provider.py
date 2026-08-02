@@ -1,3 +1,4 @@
+from decimal import Decimal
 from typing import Any
 
 from app.core.config import settings
@@ -33,7 +34,7 @@ class CJDropshippingProvider(SupplierProvider):
 
     def calculate_shipping(self, payload: dict[str, Any]) -> dict[str, Any]:
         result = self.client.post("/api2.0/v1/logistic/freightCalculate", payload)
-        return result.get("data") or result
+        return {"quotes": self._normalize_shipping_quotes(result.get("data") or result), "raw": result}
 
     def create_supplier_order(self, order_payload: dict[str, Any]) -> dict[str, Any]:
         cj_payload = self._to_cj_order(order_payload)
@@ -99,3 +100,35 @@ class CJDropshippingProvider(SupplierProvider):
             "remark": order_payload.get("notes") or "",
             "products": items,
         }
+
+    def _normalize_shipping_quotes(self, data: Any) -> list[dict[str, Any]]:
+        if isinstance(data, dict):
+            candidates = data.get("list") or data.get("logisticList") or data.get("freightList") or data.get("shippingMethods") or data.get("routes")
+        else:
+            candidates = data
+        if not isinstance(candidates, list):
+            candidates = [data] if isinstance(data, dict) else []
+        quotes: list[dict[str, Any]] = []
+        for item in candidates:
+            if not isinstance(item, dict):
+                continue
+            name = item.get("logisticName") or item.get("shippingName") or item.get("name") or item.get("channelName") or settings.cj_default_logistic_name
+            amount = item.get("logisticPrice") or item.get("shippingFee") or item.get("freight") or item.get("price") or item.get("amount")
+            try:
+                amount_decimal = Decimal(str(amount or "0"))
+            except Exception:
+                amount_decimal = Decimal("0")
+            min_days = int(item.get("minDeliveryDay") or item.get("minDay") or item.get("deliveryMin") or item.get("aging") or 7)
+            max_days = int(item.get("maxDeliveryDay") or item.get("maxDay") or item.get("deliveryMax") or item.get("aging") or min_days + 7)
+            quotes.append(
+                {
+                    "code": f"cj_{str(name).lower().replace(' ', '_')[:50]}",
+                    "name": str(name),
+                    "amount": amount_decimal,
+                    "currency": str(item.get("currency") or "USD").upper(),
+                    "min_days": min_days,
+                    "max_days": max_days,
+                    "tracking_available": True,
+                }
+            )
+        return quotes
