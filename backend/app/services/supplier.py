@@ -528,7 +528,23 @@ class SupplierService:
         fallback = "AliExpress Product" if provider == "aliexpress" else "CJ Product"
         supplier_product_id = str(self._pick(item, "pid", "productId", "product_id", "ae_product_id", "id", "supplierProductId", "productSku", "spu", "productCode", "productNo") or "")
         name = self._clean_title(str(self._english_first(item, "subject", "product_title", "productTitle", "productNameEn", "nameEn", "title", "variantNameEn", "productName", "productNameCn", "name") or fallback))
-        image_url = self._first_image(self._pick(item, "product_main_image_url", "productImage", "productImageSet", "image", "imageUrl", "productImages", "variantImage", "product_small_image_urls"))
+        image_url = self._first_image(
+            self._pick(
+                item,
+                "product_main_image_url",
+                "product_main_image",
+                "main_image_url",
+                "image_url",
+                "productImage",
+                "productImageSet",
+                "image",
+                "imageUrl",
+                "productImages",
+                "variantImage",
+                "product_small_image_urls",
+                "ae_item_image_info_dtos",
+            )
+        )
         variants_raw = self._pick(item, "variants", "variantList", "variantsList", "productVariantList", "ae_item_sku_info_dtos", "sku_info_list", "skuInfoList") or []
         if isinstance(variants_raw, dict):
             variants_raw = variants_raw.get("ae_item_sku_info_d_t_o") or variants_raw.get("sku_info") or variants_raw.get("item") or []
@@ -547,7 +563,7 @@ class SupplierService:
                     image_url=image_url,
                 )
             ]
-        description = self._clean_description(str(self._pick(item, "product_detail", "description", "productDescription", "productDescriptionEn", "descriptionEn") or ""))
+        description = self._clean_description(str(self._pick(item, "product_detail", "detail", "description", "productDescription", "productDescriptionEn", "descriptionEn", "mobile_detail") or ""))
         variants = self._normalize_supplier_variants(variants, f"{name} {description}")
         return SupplierProductRead(
             supplier_product_id=supplier_product_id,
@@ -617,16 +633,28 @@ class SupplierService:
         ]
 
     def _images(self, detail: dict[str, Any], fallback: str | None) -> list[str]:
-        values = self._pick(detail, "productImageSet", "productImages", "images", "imageList", "productImage")
+        values = self._pick(detail, "productImageSet", "productImages", "images", "imageList", "productImage", "product_small_image_urls", "ae_item_image_info_dtos")
         images: list[str] = []
         if isinstance(values, str):
             images.extend([item.strip() for item in values.split(",") if item.strip()])
+        elif isinstance(values, dict):
+            nested = self._pick(values, "string", "image", "images", "image_url", "imageUrl", "ae_item_image_info_d_t_o")
+            if isinstance(nested, str):
+                images.extend([item.strip() for item in nested.split(",") if item.strip()])
+            elif isinstance(nested, list):
+                for item in nested:
+                    if isinstance(item, str):
+                        images.append(item)
+                    elif isinstance(item, dict):
+                        image = self._pick(item, "url", "image", "imageUrl", "image_url")
+                        if image:
+                            images.append(str(image))
         elif isinstance(values, list):
             for item in values:
                 if isinstance(item, str):
                     images.append(item)
                 elif isinstance(item, dict):
-                    image = self._pick(item, "url", "image", "imageUrl")
+                    image = self._pick(item, "url", "image", "imageUrl", "image_url")
                     if image:
                         images.append(str(image))
         if fallback:

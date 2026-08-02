@@ -85,21 +85,47 @@ class AliExpressProvider:
         raise AliExpressError(errors[-1] if errors else "AliExpress product was not found.")
 
     def calculate_shipping(self, payload: dict[str, Any]) -> dict[str, Any]:
+        product_id = payload.get("product_id") or payload.get("supplierProductId")
+        sku_attr = payload.get("sku_attr") or payload.get("supplierVariantId") or payload.get("vid")
+        country = payload.get("country") or payload.get("endCountryCode") or payload.get("shippingCountryCode")
+        freight_dto = {
+            "productId": str(product_id or ""),
+            "selectedSkuId": str(sku_attr or ""),
+            "selectedSkuAttr": str(sku_attr or ""),
+            "productNum": int(payload.get("quantity") or 1),
+            "sendGoodsCountry": "CN",
+            "country": str(country or "").upper(),
+            "province": payload.get("state") or payload.get("shippingProvince") or "",
+            "city": payload.get("city") or payload.get("shippingCity") or "",
+            "zip": payload.get("postal_code") or payload.get("shippingZip") or "",
+            "currency": payload.get("currency", "USD"),
+            "locale": "pt_BR",
+        }
         request_payload = {
-            "product_id": payload.get("product_id") or payload.get("supplierProductId"),
-            "sku_attr": payload.get("sku_attr") or payload.get("supplierVariantId") or payload.get("vid"),
-            "quantity": payload.get("quantity", 1),
-            "ship_to_country": payload.get("country") or payload.get("endCountryCode") or payload.get("shippingCountryCode"),
-            "province": payload.get("state") or payload.get("shippingProvince"),
-            "city": payload.get("city") or payload.get("shippingCity"),
-            "zip": payload.get("postal_code") or payload.get("shippingZip"),
+            "aeopFreightCalculateForBuyerDTO": freight_dto,
             "target_currency": payload.get("currency", "USD"),
             "locale": "pt_BR",
         }
         errors: list[str] = []
-        for method in ("aliexpress.ds.freight.query", "aliexpress.logistics.buyer.freight.get"):
+        for method, method_payload in (
+            ("aliexpress.ds.freight.query", request_payload),
+            (
+                "aliexpress.logistics.buyer.freight.get",
+                {
+                    "product_id": product_id,
+                    "sku_attr": sku_attr,
+                    "quantity": payload.get("quantity", 1),
+                    "ship_to_country": country,
+                    "province": payload.get("state") or payload.get("shippingProvince"),
+                    "city": payload.get("city") or payload.get("shippingCity"),
+                    "zip": payload.get("postal_code") or payload.get("shippingZip"),
+                    "target_currency": payload.get("currency", "USD"),
+                    "locale": "pt_BR",
+                },
+            ),
+        ):
             try:
-                data = self.client.ds_method(method, request_payload)
+                data = self.client.ds_method(method, method_payload)
             except AliExpressError as exc:
                 errors.append(str(exc))
                 continue
@@ -169,13 +195,23 @@ class AliExpressProvider:
             "aliexpress_ds_recommend_feed_get_response",
             "aliexpress_ds_product_get_response",
             "aliexpress_ds_product_simplequery_response",
+            "aliexpress_ds_product_get_response",
             "result",
             "resp_result",
+            "ae_item_base_info_dto",
         ):
             if isinstance(source, dict) and isinstance(source.get(key), (dict, list)):
                 source = source[key]
         if isinstance(source, dict):
-            rows = source.get("products") or source.get("product") or source.get("product_list") or source.get("aeopAEProductDisplayDTOList") or source.get("items") or source.get("ae_item_base_info_dto")
+            rows = (
+                source.get("products")
+                or source.get("product")
+                or source.get("product_list")
+                or source.get("aeopAEProductDisplayDTOList")
+                or source.get("items")
+                or source.get("ae_item_base_info_dto")
+                or source.get("ae_item_display_d_t_o")
+            )
             if isinstance(rows, dict):
                 rows = rows.get("item") or rows.get("product")
             if isinstance(rows, list):
@@ -190,12 +226,33 @@ class AliExpressProvider:
 
     def _shipping_rows(self, data: dict[str, Any]) -> list[dict[str, Any]]:
         source: Any = data
-        for key in ("result", "resp_result", "logistics_result"):
+        for key in (
+            "aliexpress_ds_freight_query_response",
+            "aliexpress_logistics_buyer_freight_get_response",
+            "result",
+            "resp_result",
+            "logistics_result",
+        ):
             if isinstance(source, dict) and isinstance(source.get(key), (dict, list)):
                 source = source[key]
-        candidates = source.get("freight") or source.get("shipping_methods") or source.get("aeop_freight_calculate_result_for_buyer_d_t_o") if isinstance(source, dict) else source
+        if isinstance(source, dict):
+            candidates = (
+                source.get("freight")
+                or source.get("freight_list")
+                or source.get("shipping_methods")
+                or source.get("aeop_freight_calculate_result_for_buyer_d_t_o")
+                or source.get("aeopFreightCalculateResultForBuyerDTO")
+            )
+        else:
+            candidates = source
         if isinstance(candidates, dict):
-            candidates = candidates.get("freight") or candidates.get("list") or candidates.get("shipping_method")
+            candidates = (
+                candidates.get("freight")
+                or candidates.get("list")
+                or candidates.get("shipping_method")
+                or candidates.get("aeop_freight_calculate_result_for_buyer_d_t_o")
+                or candidates.get("aeopFreightCalculateResultForBuyerDTO")
+            )
         if not isinstance(candidates, list):
             candidates = [source] if isinstance(source, dict) else []
         quotes: list[dict[str, Any]] = []
