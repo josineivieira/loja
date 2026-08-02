@@ -219,7 +219,7 @@ export function CheckoutPage() {
             <div>
               <h2 className="text-lg font-semibold">Payment</h2>
               <div className="mt-4 rounded-md border border-slate-200 p-4 text-sm text-slate-600">
-                Stripe test checkout is requested after the order is created. If no Stripe secret key is configured, Nexora uses a pending test placeholder.
+                After placing the order, Nexora creates a secure Stripe Checkout session. If production Stripe keys are not configured yet, the order stays pending without charging a card.
               </div>
             </div>
           ) : null}
