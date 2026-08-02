@@ -57,6 +57,8 @@ def integration_status(_: AdminUser) -> IntegrationStatusRead:
         supplier_provider=settings.supplier_provider,
         cj_configured=bool(settings.cj_api_key or settings.cj_platform_token),
         cj_sandbox=settings.cj_sandbox,
+        aliexpress_configured=bool(settings.aliexpress_app_key and settings.aliexpress_app_secret),
+        aliexpress_sandbox=settings.aliexpress_sandbox,
         email_provider=settings.email_provider or "log",
         email_configured=bool(settings.email_api_key),
         frontend_url=str(settings.frontend_url),

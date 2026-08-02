@@ -29,6 +29,8 @@ export function getIntegrationStatus() {
       supplier_provider: "manual",
       cj_configured: false,
       cj_sandbox: false,
+      aliexpress_configured: false,
+      aliexpress_sandbox: true,
       email_provider: "log",
       email_configured: false,
       frontend_url: window.location.origin,

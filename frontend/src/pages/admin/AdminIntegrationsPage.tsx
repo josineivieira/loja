@@ -68,17 +68,19 @@ export function AdminIntegrationsPage() {
         </section>
         {statusError ? <div className="mb-5 rounded-md bg-red-50 p-3 text-sm text-danger">{statusError}</div> : null}
         {status ? (
-          <section className="mb-5 grid gap-3 md:grid-cols-4">
+          <section className="mb-5 grid gap-3 md:grid-cols-5">
             <IntegrationCard label="Stripe secret" active={status.stripe_secret_configured} />
             <IntegrationCard label="Stripe webhook" active={status.stripe_webhook_configured} />
             <IntegrationCard label={`Supplier: ${status.supplier_provider}`} active={status.supplier_provider === "cj" ? status.cj_configured : true} />
+            <IntegrationCard label={`AliExpress${status.aliexpress_sandbox ? " test" : ""}`} active={status.aliexpress_configured} />
             <IntegrationCard label={`Email: ${status.email_provider}`} active={status.email_provider === "log" || status.email_configured} />
           </section>
         ) : (
-          <section className="mb-5 grid gap-3 md:grid-cols-4">
+          <section className="mb-5 grid gap-3 md:grid-cols-5">
             <IntegrationCard label="Stripe secret" active={false} />
             <IntegrationCard label="Stripe webhook" active={false} />
             <IntegrationCard label="Supplier status" active={false} />
+            <IntegrationCard label="AliExpress" active={false} />
             <IntegrationCard label="Email status" active={false} />
           </section>
         )}

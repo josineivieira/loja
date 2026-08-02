@@ -90,6 +90,8 @@ export type IntegrationStatus = {
   supplier_provider: string;
   cj_configured: boolean;
   cj_sandbox: boolean;
+  aliexpress_configured: boolean;
+  aliexpress_sandbox: boolean;
   email_provider: string;
   email_configured: boolean;
   frontend_url: string;

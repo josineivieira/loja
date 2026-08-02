@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     cj_price_markup_fixed: float = 4.9
     cj_shipping_markup_multiplier: float = 1.0
     cj_shipping_markup_fixed: float = 0
+    aliexpress_app_key: str = ""
+    aliexpress_app_secret: str = Field(default="", repr=False)
+    aliexpress_access_token: str = Field(default="", repr=False)
+    aliexpress_refresh_token: str = Field(default="", repr=False)
+    aliexpress_sandbox: bool = True
 
     @field_validator("database_url")
     @classmethod
