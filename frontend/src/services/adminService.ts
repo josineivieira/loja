@@ -1,5 +1,5 @@
 import { api } from "./api";
-import { AxiosError } from "axios";
+import { isAxiosError } from "axios";
 import { demoAdmin } from "../data/demoAdmin";
 import type { AdminCustomer, AdminDashboard, Coupon, IntegrationStatus, ShippingMethod, SupplierOrderPayload } from "../types/admin";
 import type { Order } from "../types/checkout";
@@ -140,7 +140,7 @@ export async function importCjProduct(payload: {
     const { data } = await api.post<Product>("/admin/supplier/cj/import", payload);
     return data;
   } catch (error) {
-    const detail = error instanceof AxiosError ? error.response?.data?.detail : undefined;
+    const detail = isAxiosError(error) ? error.response?.data?.detail : undefined;
     throw new Error(typeof detail === "string" ? detail : "Nao foi possivel importar este produto da CJ.");
   }
 }

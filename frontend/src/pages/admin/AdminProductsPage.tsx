@@ -225,7 +225,7 @@ export function AdminProductsPage() {
       setCjProducts((items) => items.filter((item) => item.supplier_product_id !== preview.supplier_product_id));
       setPreview(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Nao foi possivel importar. O produto pode ja existir ou a variante CJ nao veio com ID valido.");
+      setError(apiErrorMessage(err, "Nao foi possivel importar. O produto pode ja existir ou a variante CJ nao veio com ID valido."));
     }
   }
 

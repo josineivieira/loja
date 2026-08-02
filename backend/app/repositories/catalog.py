@@ -140,6 +140,14 @@ class ProductRepository:
             return False
         from datetime import UTC, datetime
 
-        product.deleted_at = datetime.now(UTC)
+        deleted_at = datetime.now(UTC)
+        suffix = f"-deleted-{deleted_at.strftime('%Y%m%d%H%M%S')}"
+        product.deleted_at = deleted_at
+        product.status = "deleted"
+        product.slug = f"{product.slug[:180]}{suffix}"
+        product.sku = f"{product.sku[:60]}{suffix}".upper()
+        for variant in product.variants:
+            variant.status = "deleted"
+            variant.sku = f"{variant.sku[:80]}{suffix}".upper()
         self.db.commit()
         return True
