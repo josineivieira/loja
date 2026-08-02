@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CreditCard, MapPin, PackageCheck, Truck } from "lucide-react";
+import { CreditCard, Loader2, MapPin, PackageCheck, Truck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router-dom";
@@ -82,6 +82,7 @@ export function CheckoutPage() {
   }
 
   async function continueCheckout() {
+    if (loading || submitting) return;
     if (step === 2) {
       const isValid = await form.trigger();
       if (!isValid) return;
@@ -91,6 +92,7 @@ export function CheckoutPage() {
   }
 
   async function selectShippingMethod(code: string) {
+    if (loading || submitting) return;
     const isValid = await form.trigger();
     if (!isValid) {
       setStep(2);
@@ -101,7 +103,7 @@ export function CheckoutPage() {
   }
 
   async function submit(values: CheckoutAddressForm) {
-    if (!calculation) return;
+    if (!calculation || submitting) return;
     setSubmitting(true);
     setError(null);
     try {
@@ -113,12 +115,13 @@ export function CheckoutPage() {
         currency: calculation.totals.currency,
         idempotency_key: crypto.randomUUID(),
       });
-      clear();
       const paymentSession = await createPaymentSession(order.order_number);
       if (paymentSession.payment_url) {
+        clear();
         window.location.href = paymentSession.payment_url;
         return;
       }
+      clear();
       navigate(`/order-confirmation?order=${encodeURIComponent(order.order_number)}&payment=${paymentSession.mode}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to create order.");
@@ -144,7 +147,16 @@ export function CheckoutPage() {
   const currency = totals?.currency ?? items[0]?.currency ?? "USD";
 
   return (
-    <section className="mx-auto max-w-7xl px-4 py-8">
+    <section className="relative mx-auto max-w-7xl px-4 py-8">
+      {submitting ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-white/80 backdrop-blur-sm">
+          <div className="rounded-lg border border-slate-200 bg-white p-6 text-center shadow-lg">
+            <Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" />
+            <p className="mt-3 font-semibold">Creating secure payment session...</p>
+            <p className="mt-1 text-sm text-slate-600">Please do not close or refresh this page.</p>
+          </div>
+        </div>
+      ) : null}
       <div className="mb-8">
         <h1 className="text-3xl font-semibold">Checkout</h1>
         <div className="mt-5 grid gap-3 md:grid-cols-5">
@@ -155,7 +167,7 @@ export function CheckoutPage() {
             ["Payment", CreditCard],
             ["Review", PackageCheck],
           ].map(([label, Icon], index) => (
-            <button key={label as string} className={`rounded-md border px-3 py-3 text-left text-sm ${step === index + 1 ? "border-primary bg-blue-50 text-primary" : "border-slate-200"}`} onClick={() => setStep(index + 1)}>
+            <button key={label as string} disabled={submitting} className={`rounded-md border px-3 py-3 text-left text-sm disabled:opacity-60 ${step === index + 1 ? "border-primary bg-blue-50 text-primary" : "border-slate-200"}`} onClick={() => setStep(index + 1)}>
               <Icon className="mb-2 h-4 w-4" />
               {label as string}
             </button>
@@ -239,16 +251,16 @@ export function CheckoutPage() {
           ) : null}
 
           <div className="mt-6 flex justify-between gap-3">
-            <button type="button" className="rounded-md border border-slate-200 px-4 py-2 text-sm disabled:text-slate-300" disabled={step === 1} onClick={() => setStep((value) => value - 1)}>
+            <button type="button" className="rounded-md border border-slate-200 px-4 py-2 text-sm disabled:text-slate-300" disabled={step === 1 || submitting} onClick={() => setStep((value) => value - 1)}>
               Back
             </button>
             {step < 5 ? (
-              <button type="button" className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white" onClick={continueCheckout}>
-                Continue
+              <button type="button" disabled={loading || submitting} className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-300" onClick={continueCheckout}>
+                {loading ? "Checking..." : "Continue"}
               </button>
             ) : (
               <button type="submit" disabled={submitting || loading} className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-300">
-                Place order
+                {submitting ? "Redirecting..." : "Place order"}
               </button>
             )}
           </div>
@@ -258,7 +270,7 @@ export function CheckoutPage() {
           <h2 className="text-lg font-semibold">Summary</h2>
           <div className="mt-4 flex gap-2">
             <input className="h-10 min-w-0 flex-1 rounded-md border border-slate-200 px-3 text-sm uppercase outline-none" placeholder="Coupon" value={couponCode} onChange={(event) => setCouponCode(event.target.value.toUpperCase())} />
-            <button type="button" className="rounded-md border border-slate-200 px-3 text-sm font-semibold" onClick={applyCoupon}>
+            <button type="button" disabled={loading || submitting} className="rounded-md border border-slate-200 px-3 text-sm font-semibold disabled:text-slate-300" onClick={applyCoupon}>
               Apply
             </button>
           </div>
