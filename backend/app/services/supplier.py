@@ -603,9 +603,15 @@ class SupplierService:
             raw_options = raw_name
             raw_name = " ".join(raw_options.values())
         parsed = raw_options or self._parse_variant_options(str(raw_name), product_description, index)
+        normalized_labels: dict[str, str] = {}
         for option_name, label in parsed.items():
             normalized_option = self._normalize_option_name(option_name)
             label = self._translate_option_label(normalized_option, str(label))
+            if normalized_option in normalized_labels:
+                continue
+            normalized_labels[normalized_option] = label
+        linked_values: set[uuid.UUID] = set()
+        for normalized_option, label in normalized_labels.items():
             key = (normalized_option, label.lower())
             option_value = option_cache.get(key)
             if not option_value:
@@ -625,6 +631,9 @@ class SupplierService:
                 self.repo.db.flush()
                 option.values.append(option_value)
                 option_cache[key] = option_value
+            if option_value.id in linked_values:
+                continue
+            linked_values.add(option_value.id)
             self.repo.db.add(VariantOptionValue(variant_id=variant.id, option_value_id=option_value.id))
 
     def _normalize_option_name(self, value: str) -> str:

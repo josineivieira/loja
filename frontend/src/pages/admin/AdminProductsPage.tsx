@@ -80,6 +80,24 @@ function hasCjk(value?: string | null) {
   return /[\u3400-\u9fff]/.test(value ?? "");
 }
 
+function cleanVariantOptions(options: Record<string, string>) {
+  const cleaned: Record<string, string> = {};
+  const color = options.Color || options.color;
+  const size = options.Size || options.size;
+  const capacity = options.Capacity || options.capacity;
+  const style = options.Style || options.style;
+  if (color) cleaned.Color = color;
+  if (size) cleaned.Size = size;
+  if (capacity) cleaned.Capacity = capacity;
+  if (style) cleaned.Style = style;
+  for (const [key, value] of Object.entries(options)) {
+    const normalized = key.toLowerCase();
+    if (["color", "size", "capacity", "style"].includes(normalized)) continue;
+    if (value) cleaned[key] = value;
+  }
+  return cleaned;
+}
+
 export function AdminProductsPage() {
   const language = usePreferencesStore((state) => state.language);
   const [products, setProducts] = useState<Product[]>([]);
@@ -230,7 +248,7 @@ export function AdminProductsPage() {
           supplier_variant_id: variant.supplier_variant_id,
           sku: variant.sku,
           name: variant.name,
-          options: variant.options,
+          options: cleanVariantOptions(variant.options),
           sale_price: parseAmount(variant.sale_price),
           cost_price: parseAmount(variant.cost_price),
           stock: parseQuantity(variant.stock),
