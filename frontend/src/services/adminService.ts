@@ -23,6 +23,42 @@ export function listAdminProducts() {
   return withFallback(async () => (await api.get<Product[]>("/admin/products")).data, demoAdmin.products);
 }
 
+export async function createAdminProduct(payload: {
+  name: string;
+  slug: string;
+  sku: string;
+  sale_price: number;
+  cost_price: number;
+  stock: number;
+  status: string;
+  short_description?: string;
+}) {
+  const { data } = await api.post<Product>("/admin/products", {
+    name: payload.name,
+    slug: payload.slug,
+    sku: payload.sku,
+    sale_price: payload.sale_price,
+    cost_price: payload.cost_price,
+    status: payload.status,
+    short_description: payload.short_description,
+    variants: [
+      {
+        sku: `${payload.sku}-DEFAULT`,
+        price: payload.sale_price,
+        cost: payload.cost_price,
+        stock: payload.stock,
+        status: "active",
+      },
+    ],
+  });
+  return data;
+}
+
+export async function createAdminCategory(payload: { name: string; slug: string; description?: string }) {
+  const { data } = await api.post("/admin/categories", payload);
+  return data;
+}
+
 export function listAdminOrders() {
   return withFallback(async () => (await api.get<Order[]>("/admin/orders")).data, demoAdmin.orders);
 }
@@ -35,8 +71,37 @@ export function listAdminCoupons() {
   return withFallback(async () => (await api.get<Coupon[]>("/admin/coupons")).data, demoAdmin.coupons);
 }
 
+export async function createAdminCoupon(payload: {
+  code: string;
+  name: string;
+  discount_type: "percent" | "fixed" | "free_shipping";
+  value: number;
+  minimum_amount: number;
+}) {
+  const { data } = await api.post<Coupon>("/admin/coupons", { ...payload, active: true });
+  return data;
+}
+
 export function listAdminShippingMethods() {
   return withFallback(async () => (await api.get<ShippingMethod[]>("/admin/shipping-methods")).data, demoAdmin.shippingMethods);
+}
+
+export async function createAdminShippingMethod(payload: {
+  name: string;
+  code: string;
+  countries: string[];
+  min_days: number;
+  max_days: number;
+  amount: number;
+  currency: string;
+}) {
+  const { data } = await api.post<ShippingMethod>("/admin/shipping-methods", {
+    ...payload,
+    origin_country: "CN",
+    tracking_available: true,
+    active: true,
+  });
+  return data;
 }
 
 export function listSupplierOrders() {
@@ -104,4 +169,3 @@ export async function addSupplierTracking(orderNumber: string, trackingNumber: s
     { ...demoAdmin.orders[0], status: "shipped", fulfillment_status: "shipped", supplier_status: "shipped" } as Order,
   );
 }
-

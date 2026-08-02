@@ -20,6 +20,7 @@ import { RegisterPage } from "../pages/RegisterPage";
 import { SearchPage } from "../pages/SearchPage";
 import { TrackingPage } from "../pages/TrackingPage";
 import { AdminCouponsPage } from "../pages/admin/AdminCouponsPage";
+import { AdminCategoriesPage } from "../pages/admin/AdminCategoriesPage";
 import { AdminCustomersPage } from "../pages/admin/AdminCustomersPage";
 import { AdminDashboardPage } from "../pages/admin/AdminDashboardPage";
 import { AdminIntegrationsPage } from "../pages/admin/AdminIntegrationsPage";
@@ -37,7 +38,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <AdminDashboardPage /> },
       { path: "products", element: <AdminProductsPage /> },
-      { path: "categories", element: <AdminPlaceholderPage title="Categories" /> },
+      { path: "categories", element: <AdminCategoriesPage /> },
       { path: "variants", element: <AdminPlaceholderPage title="Variants" /> },
       { path: "inventory", element: <AdminPlaceholderPage title="Inventory" /> },
       { path: "orders", element: <AdminOrdersPage /> },

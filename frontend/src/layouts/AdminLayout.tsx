@@ -1,5 +1,7 @@
 import { BarChart3, Bell, Boxes, ClipboardList, CreditCard, FileText, Home, LogOut, Megaphone, Package, Settings, ShieldCheck, Star, Tags, Truck, Users } from "lucide-react";
-import { NavLink, Outlet } from "react-router-dom";
+import { useEffect } from "react";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useAuthStore } from "../stores/authStore";
 
 const navItems = [
   { to: "/admin", label: "Dashboard", icon: BarChart3 },
@@ -19,6 +21,14 @@ const navItems = [
 ];
 
 export function AdminLayout() {
+  const navigate = useNavigate();
+  const accessToken = useAuthStore((state) => state.accessToken);
+  const logout = useAuthStore((state) => state.logout);
+
+  useEffect(() => {
+    if (!accessToken) navigate("/login");
+  }, [accessToken, navigate]);
+
   return (
     <div className="min-h-screen bg-mist text-ink">
       <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-slate-200 bg-white lg:block">
@@ -50,7 +60,13 @@ export function AdminLayout() {
             <p className="text-xs font-semibold uppercase text-primary">Operations</p>
             <h1 className="text-lg font-semibold">Admin panel</h1>
           </div>
-          <button className="inline-flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm">
+          <button
+            className="inline-flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm"
+            onClick={() => {
+              logout();
+              navigate("/login");
+            }}
+          >
             <LogOut className="h-4 w-4" />
             Sign out
           </button>
