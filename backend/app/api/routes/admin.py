@@ -1,7 +1,7 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies.auth import require_roles
@@ -161,7 +161,16 @@ def estimate_cj_shipping(payload: SupplierVariantShippingEstimateRequest, _: Adm
 
 @router.post("/supplier/cj/import", response_model=ProductRead, status_code=201)
 def import_cj_product(payload: SupplierProductImportRequest, _: AdminUser, db: Annotated[Session, Depends(get_db)]) -> ProductRead:
-    return SupplierService(db).import_cj_product(payload)
+    try:
+        return SupplierService(db).import_cj_product(payload)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Nao foi possivel importar este produto da CJ: {exc.__class__.__name__}",
+        ) from exc
 
 
 @router.get("/supplier/orders/{order_number}/payload", response_model=SupplierOrderPayloadRead)

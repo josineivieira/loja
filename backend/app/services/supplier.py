@@ -7,7 +7,7 @@ from typing import Any
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -124,33 +124,38 @@ class SupplierService:
             is_new=True,
             is_bestseller=False,
         )
-        self.repo.db.add(product)
-        self.repo.db.flush()
-        option_cache: dict[tuple[str, str], ProductOptionValue] = {}
-        for index, variant_data in enumerate(variants):
-            variant = ProductVariant(
-                product_id=product.id,
-                sku=self._unique_sku(f"{variant_data.sku.upper()}-CJ", ProductVariant),
-                supplier_variant_id=variant_data.supplier_variant_id,
-                price=variant_data.price,
-                cost=variant_data.cost,
-                stock=variant_data.stock,
-                image_url=variant_data.image_url or payload.image_url,
-                status="active",
-            )
-            self.repo.db.add(variant)
-            self.repo.db.flush()
-            self._attach_variant_options(product, variant, variant_data.options or {"Option": variant_data.name or variant_data.sku}, description, index, option_cache)
-            if index == 0:
-                product.sale_price = variant_data.price
-                product.cost_price = variant_data.cost
-        for index, image_url in enumerate(images[:8]):
-            self.repo.db.add(ProductImage(product_id=product.id, url=image_url, alt_text=name, sort_order=index, is_primary=index == 0))
         try:
+            self.repo.db.add(product)
+            self.repo.db.flush()
+            option_cache: dict[tuple[str, str], ProductOptionValue] = {}
+            for index, variant_data in enumerate(variants):
+                variant = ProductVariant(
+                    product_id=product.id,
+                    sku=self._unique_sku(f"{variant_data.sku.upper()}-CJ", ProductVariant),
+                    supplier_variant_id=variant_data.supplier_variant_id,
+                    price=variant_data.price,
+                    cost=variant_data.cost,
+                    stock=variant_data.stock,
+                    image_url=self._safe_url(variant_data.image_url or payload.image_url),
+                    status="active",
+                )
+                self.repo.db.add(variant)
+                self.repo.db.flush()
+                self._attach_variant_options(product, variant, variant_data.options or {"Option": variant_data.name or variant_data.sku}, description, index, option_cache)
+                if index == 0:
+                    product.sale_price = variant_data.price
+                    product.cost_price = variant_data.cost
+            for index, image_url in enumerate(images[:8]):
+                safe_image_url = self._safe_url(image_url)
+                if safe_image_url:
+                    self.repo.db.add(ProductImage(product_id=product.id, url=safe_image_url, alt_text=name[:255], sort_order=index, is_primary=index == 0))
             self.repo.db.commit()
         except IntegrityError as exc:
             self.repo.db.rollback()
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Produto apagado antigo ainda segurava SKU/variante. Tente importar novamente agora.") from exc
+        except SQLAlchemyError as exc:
+            self.repo.db.rollback()
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Nao foi possivel salvar este produto da CJ no banco: {exc.__class__.__name__}") from exc
         self.repo.db.refresh(product)
         return product
 
@@ -491,6 +496,14 @@ class SupplierService:
         if fallback:
             images.insert(0, fallback)
         return list(dict.fromkeys(images))
+
+    def _safe_url(self, value: str | None) -> str | None:
+        if not value:
+            return None
+        cleaned = str(value).strip()
+        if not cleaned.startswith(("http://", "https://")):
+            return None
+        return cleaned[:700]
 
     def _clean_description(self, value: str) -> str:
         cleaned = unescape(value)
