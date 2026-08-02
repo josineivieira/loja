@@ -5,6 +5,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from app.core.config import settings
@@ -63,17 +64,19 @@ class AliExpressClient:
             raise AliExpressError("ALIEXPRESS_APP_KEY and ALIEXPRESS_APP_SECRET are required.")
         request_payload: dict[str, Any] = {
             "app_key": self.app_key,
-            "timestamp": str(int(time.time() * 1000)),
-            "sign_method": "sha256",
+            "format": "json",
             "method": method,
+            "simplify": "true",
+            "timestamp": self._top_timestamp(),
+            "sign_method": "sha256",
             **payload,
         }
         if include_access_token:
             if not self._access_token:
                 raise AliExpressError("ALIEXPRESS_ACCESS_TOKEN is missing.")
-            request_payload["access_token"] = self._access_token
-        request_payload["sign"] = self._sign("/sync", request_payload)
-        data = self._post(self.sync_url, request_payload)
+            request_payload["session"] = self._access_token
+        request_payload["sign"] = self._sign("", request_payload)
+        data = self._post_query(self.sync_url, request_payload)
         self._raise_sync_error(data)
         return data
 
@@ -98,6 +101,14 @@ class AliExpressClient:
     def _post(self, url: str, payload: dict[str, Any]) -> dict[str, Any]:
         encoded = urllib.parse.urlencode({key: self._encode_value(value) for key, value in payload.items()}).encode("utf-8")
         request = urllib.request.Request(url, data=encoded, headers={"Content-Type": "application/x-www-form-urlencoded"}, method="POST")
+        return self._open_json(request)
+
+    def _post_query(self, url: str, payload: dict[str, Any]) -> dict[str, Any]:
+        query = urllib.parse.urlencode({key: self._encode_value(value) for key, value in payload.items()})
+        request = urllib.request.Request(f"{url}?{query}", data=b"", method="POST")
+        return self._open_json(request)
+
+    def _open_json(self, request: urllib.request.Request) -> dict[str, Any]:
         try:
             with urllib.request.urlopen(request, timeout=30) as response:
                 body = response.read().decode("utf-8")
@@ -133,3 +144,6 @@ class AliExpressClient:
                 if isinstance(value, str) and value:
                     return value
         return None
+
+    def _top_timestamp(self) -> str:
+        return (datetime.now(UTC) + timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
