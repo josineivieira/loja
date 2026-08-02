@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     cj_default_from_country: str = "CN"
     cj_price_markup_multiplier: float = 2.2
     cj_price_markup_fixed: float = 4.9
-    cj_shipping_markup_multiplier: float = 1.15
+    cj_shipping_markup_multiplier: float = 1.0
     cj_shipping_markup_fixed: float = 0
 
     @field_validator("database_url")

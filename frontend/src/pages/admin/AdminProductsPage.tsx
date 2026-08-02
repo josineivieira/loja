@@ -93,6 +93,19 @@ function cleanVariantOptions(options: Record<string, string>) {
   return cleaned;
 }
 
+function shippingDisplayName(name: string, code: string) {
+  const source = `${name} ${code}`.toLowerCase();
+  if (source.includes("postal") || source.includes("postnl")) return "Envio postal internacional";
+  if (source.includes("special") || source.includes("liquid") || source.includes("line")) return "Envio rastreado";
+  if (source.includes("sensitive")) return "Envio especial rastreado";
+  if (source.includes("dhl")) return "Envio expresso internacional";
+  return "Envio econômico";
+}
+
+function bestShippingQuotes(quotes: SupplierShippingEstimate[]) {
+  return [...quotes].sort((a, b) => Number(a.amount) - Number(b.amount) || a.max_days - b.max_days).slice(0, 3);
+}
+
 export function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -280,7 +293,7 @@ export function AdminProductsPage() {
         }));
       }
       setShippingCheckedVariants(selectedVariants.length);
-      setShippingQuotes(testedQuotes[0] ?? []);
+      setShippingQuotes(bestShippingQuotes(testedQuotes[0] ?? []));
     } catch (err) {
       setShippingError(err instanceof Error ? err.message : "A CJ nao retornou entrega para todas as variantes selecionadas nesse destino.");
     } finally {
@@ -486,15 +499,16 @@ export function AdminProductsPage() {
                     </div>
                     <button type="button" className="w-fit rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white" onClick={testShipping} disabled={shippingLoading}>{shippingLoading ? "Consultando CJ..." : "Testar entrega das variantes selecionadas"}</button>
                     {shippingError ? <div className="rounded-md bg-red-50 p-3 text-sm text-danger">{shippingError}</div> : null}
-                    {shippingCheckedVariants ? <div className="rounded-md bg-green-50 p-3 text-sm text-emerald-700">CJ retornou entrega para {shippingCheckedVariants} variante(s) selecionada(s). As opcoes abaixo sao da primeira variante; no checkout o sistema recalcula o carrinho completo.</div> : null}
+                    {shippingCheckedVariants ? <div className="rounded-md bg-green-50 p-3 text-sm text-emerald-700">CJ retornou entrega para {shippingCheckedVariants} variante(s). Estes valores vêm da CJ para país, rota, peso e método. Em alguns métodos internacionais, CEPs diferentes do mesmo país podem retornar o mesmo preço.</div> : null}
                     {shippingQuotes.length ? (
                       <div className="grid gap-2 md:grid-cols-3">
                         {shippingQuotes.map((quote) => (
                           <div key={quote.code} className="rounded-md border border-slate-200 p-3 text-sm">
-                            <p className="font-semibold">{quote.name}</p>
+                            <p className="font-semibold">{shippingDisplayName(quote.name, quote.code)}</p>
                             <p className="mt-1">{formatMoney(Number(quote.amount), quote.currency)}</p>
                             <p className="mt-1 text-slate-600">{quote.min_days} a {quote.max_days} dias uteis</p>
-                            <p className="mt-1 text-slate-600">Rastreio: {quote.tracking_available ? "sim" : "nao informado"}</p>
+                            <p className="mt-1 text-slate-600">{quote.tracking_available ? "Rastreamento disponível" : "Rastreamento não informado"}</p>
+                            <p className="mt-1 text-xs text-slate-400">Método CJ: {quote.name}</p>
                           </div>
                         ))}
                       </div>
