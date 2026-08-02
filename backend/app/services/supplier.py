@@ -114,7 +114,7 @@ class SupplierService:
             short_description=short_description,
             description=description,
             sku=self._unique_sku(payload.sku.upper(), Product),
-            supplier_sku=payload.supplier_sku or payload.sku,
+            supplier_sku=self._short_text(payload.supplier_sku or payload.sku, 120),
             supplier_product_id=payload.supplier_product_id,
             cost_price=first_variant.cost,
             sale_price=sale_price,
@@ -132,7 +132,7 @@ class SupplierService:
                 variant = ProductVariant(
                     product_id=product.id,
                     sku=self._unique_sku(f"{variant_data.sku.upper()}-CJ", ProductVariant),
-                    supplier_variant_id=variant_data.supplier_variant_id,
+                    supplier_variant_id=self._short_text(variant_data.supplier_variant_id, 120),
                     price=variant_data.price,
                     cost=variant_data.cost,
                     stock=variant_data.stock,
@@ -505,6 +505,12 @@ class SupplierService:
             return None
         return cleaned[:700]
 
+    def _short_text(self, value: str | None, max_length: int) -> str | None:
+        if value is None:
+            return None
+        cleaned = re.sub(r"\s+", " ", str(value)).strip()
+        return cleaned[:max_length]
+
     def _clean_description(self, value: str) -> str:
         cleaned = unescape(value)
         cleaned = re.sub(r"<[^>]+>", " ", cleaned)
@@ -659,7 +665,8 @@ class SupplierService:
             return "capacity"
         if cleaned in {"estilo"}:
             return "style"
-        return cleaned or "option"
+        cleaned = re.sub(r"[^a-z0-9_ -]+", "", cleaned).strip()
+        return (cleaned[:70] or "option")
 
     def _option_display_name(self, value: str) -> str:
         return {
@@ -668,10 +675,10 @@ class SupplierService:
             "capacity": "Capacidade",
             "style": "Estilo",
             "option": "Opcao",
-        }.get(value, value.title())
+        }.get(value, value.title())[:120]
 
     def _translate_option_label(self, option_name: str, value: str) -> str:
-        cleaned = str(value).strip()
+        cleaned = self._short_text(str(value), 120) or ""
         if option_name != "color":
             if option_name == "size":
                 return {

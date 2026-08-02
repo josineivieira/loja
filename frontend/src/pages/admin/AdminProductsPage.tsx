@@ -90,11 +90,7 @@ function cleanVariantOptions(options: Record<string, string>) {
   if (size) cleaned.Size = size;
   if (capacity) cleaned.Capacity = capacity;
   if (style) cleaned.Style = style;
-  for (const [key, value] of Object.entries(options)) {
-    const normalized = key.toLowerCase();
-    if (["color", "size", "capacity", "style"].includes(normalized)) continue;
-    if (value) cleaned[key] = value;
-  }
+  if (!Object.keys(cleaned).length && options.Option) cleaned.Option = options.Option;
   return cleaned;
 }
 
