@@ -5,10 +5,14 @@ import { AdminTable } from "../../components/AdminTable";
 import {
   createAdminProduct,
   deleteAdminProduct,
+  estimateAliExpressVariantShipping,
   estimateCjVariantShipping,
+  importAliExpressProduct,
   importCjProduct,
   listAdminProducts,
+  previewAliExpressProduct,
   previewCjProduct,
+  searchAliExpressProducts,
   searchCjProducts,
   updateAdminProduct,
 } from "../../services/adminService";
@@ -18,6 +22,7 @@ import { presentSupplierDescription, presentSupplierName } from "../../utils/pro
 import { AxiosError } from "axios";
 
 type ImportTab = "product" | "variants" | "media" | "description" | "shipping";
+type SupplierProvider = "cj" | "aliexpress";
 
 type ImportVariantDraft = {
   supplier_variant_id: string;
@@ -110,6 +115,7 @@ export function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [showCjImport, setShowCjImport] = useState(false);
+  const [importProvider, setImportProvider] = useState<SupplierProvider>("cj");
   const [form, setForm] = useState({ name: "", sku: "", sale_price: "49.00", cost_price: "20.00", stock: "10", short_description: "" });
   const [cjQuery, setCjQuery] = useState("");
   const [cjProducts, setCjProducts] = useState<SupplierProduct[]>([]);
@@ -161,11 +167,11 @@ export function AdminProductsPage() {
     setCjLoading(true);
     setPreview(null);
     try {
-      const results = await searchCjProducts(cjQuery);
+      const results = importProvider === "aliexpress" ? await searchAliExpressProducts(cjQuery) : await searchCjProducts(cjQuery);
       setCjProducts(results);
-      if (!results.length) setError("Nenhum produto CJ bateu exatamente com essa busca. Se for SKU de variante, copie tambem o ID do produto/pid na CJ ou autorize a loja API na CJ.");
+      if (!results.length) setError(`Nenhum produto ${importProvider === "aliexpress" ? "AliExpress" : "CJ"} bateu exatamente com essa busca. Tente o ID principal do produto, SKU, link ou nome.`);
     } catch (error) {
-      setError(apiErrorMessage(error, "Nao foi possivel buscar na CJ. Confira CJ_API_KEY e SUPPLIER_PROVIDER=cj no Render backend."));
+      setError(apiErrorMessage(error, `Nao foi possivel buscar no ${importProvider === "aliexpress" ? "AliExpress" : "CJ"}. Confira as chaves no Render backend.`));
     } finally {
       setCjLoading(false);
     }
@@ -175,7 +181,7 @@ export function AdminProductsPage() {
     setError(null);
     setPreviewLoading(product.supplier_product_id);
     try {
-      const fullProduct = await previewCjProduct(product.supplier_product_id).catch(() => product);
+      const fullProduct = await (importProvider === "aliexpress" ? previewAliExpressProduct(product.supplier_product_id) : previewCjProduct(product.supplier_product_id)).catch(() => product);
       const displayNameSource = hasCjk(fullProduct.name) && !hasCjk(product.name) ? product.name : fullProduct.name;
       const displayDescriptionSource = fullProduct.description || product.description;
       const images = imageList(fullProduct);
@@ -183,7 +189,7 @@ export function AdminProductsPage() {
       const cleanDescription = presentSupplierDescription(displayNameSource, displayDescriptionSource, "pt");
       const variants = fullProduct.variants
         .filter((variant) => variant.supplier_variant_id)
-        .slice(0, 40)
+        .slice(0, 80)
         .map((variant, index) => {
           const cost = String(variant.cost || variant.price || "0");
           return {
@@ -233,13 +239,13 @@ export function AdminProductsPage() {
 
   async function importAdvancedProduct() {
     if (!preview || !selectedVariants.length) {
-      setError("Selecione pelo menos uma variante CJ valida para importar.");
+      setError(`Selecione pelo menos uma variante ${importProvider === "aliexpress" ? "AliExpress" : "CJ"} valida para importar.`);
       return;
     }
     setError(null);
     try {
       const firstVariant = selectedVariants[0];
-      const imported = await importCjProduct({
+      const importPayload = {
         supplier_product_id: preview.supplier_product_id,
         name: draft.name,
         sku: draft.sku || firstVariant.sku,
@@ -262,12 +268,13 @@ export function AdminProductsPage() {
           image_url: variant.image_url || draft.images[0] || null,
           selected: true,
         })),
-      });
+      };
+      const imported = importProvider === "aliexpress" ? await importAliExpressProduct(importPayload) : await importCjProduct(importPayload);
       setProducts((items) => [imported, ...items]);
       setCjProducts((items) => items.filter((item) => item.supplier_product_id !== preview.supplier_product_id));
       setPreview(null);
     } catch (err) {
-      setError(apiErrorMessage(err, "Nao foi possivel importar. O produto pode ja existir ou a variante CJ nao veio com ID valido."));
+      setError(apiErrorMessage(err, `Nao foi possivel importar. O produto pode ja existir ou a variante ${importProvider === "aliexpress" ? "AliExpress" : "CJ"} nao veio com ID valido.`));
     }
   }
 
@@ -283,7 +290,9 @@ export function AdminProductsPage() {
     try {
       const testedQuotes: SupplierShippingEstimate[][] = [];
       for (const variant of selectedVariants) {
-        testedQuotes.push(await estimateCjVariantShipping({
+        const estimate = importProvider === "aliexpress" ? estimateAliExpressVariantShipping : estimateCjVariantShipping;
+        testedQuotes.push(await estimate({
+          supplier_product_id: preview?.supplier_product_id,
           supplier_variant_id: variant.supplier_variant_id,
           quantity: 1,
           country: shippingAddress.country.toUpperCase(),
@@ -295,7 +304,7 @@ export function AdminProductsPage() {
       setShippingCheckedVariants(selectedVariants.length);
       setShippingQuotes(bestShippingQuotes(testedQuotes[0] ?? []));
     } catch (err) {
-      setShippingError(err instanceof Error ? err.message : "A CJ nao retornou entrega para todas as variantes selecionadas nesse destino.");
+      setShippingError(err instanceof Error ? err.message : `O ${importProvider === "aliexpress" ? "AliExpress" : "CJ"} nao retornou entrega para todas as variantes selecionadas nesse destino.`);
     } finally {
       setShippingLoading(false);
     }
@@ -350,7 +359,7 @@ export function AdminProductsPage() {
         <h2 className="text-2xl font-semibold">Produtos</h2>
         <div className="flex gap-2">
           <button className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-semibold" onClick={() => setShowCjImport((value) => !value)}>
-            Importar da CJ
+            Importar fornecedor
           </button>
           <button className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white" onClick={() => setShowForm((value) => !value)}>
             Novo produto
@@ -361,9 +370,13 @@ export function AdminProductsPage() {
       {showCjImport ? (
         <section className="mb-5 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <form onSubmit={searchCj} className="flex flex-col gap-3 md:flex-row">
-            <input className="h-10 min-w-0 flex-1 rounded-md border border-slate-200 px-3 text-sm" placeholder="Busque na CJ por nome, SKU, produto ID ou variante ID" value={cjQuery} onChange={(event) => setCjQuery(event.target.value)} required />
+            <select className="h-10 rounded-md border border-slate-200 px-3 text-sm" value={importProvider} onChange={(event) => setImportProvider(event.target.value as SupplierProvider)}>
+              <option value="cj">CJ Dropshipping</option>
+              <option value="aliexpress">AliExpress</option>
+            </select>
+            <input className="h-10 min-w-0 flex-1 rounded-md border border-slate-200 px-3 text-sm" placeholder={`Busque no ${importProvider === "aliexpress" ? "AliExpress" : "CJ"} por nome, SKU, produto ID ou link`} value={cjQuery} onChange={(event) => setCjQuery(event.target.value)} required />
             <button className="rounded-md bg-primary px-4 text-sm font-semibold text-white" disabled={cjLoading}>
-              {cjLoading ? "Buscando..." : "Pesquisar CJ"}
+              {cjLoading ? "Buscando..." : `Pesquisar ${importProvider === "aliexpress" ? "AliExpress" : "CJ"}`}
             </button>
           </form>
 
@@ -377,9 +390,9 @@ export function AdminProductsPage() {
                   </div>
                   <div>
                     <h3 className="font-semibold">{presentSupplierName(product.name, product.description, "pt")}</h3>
-                    <p className="mt-1 text-sm text-slate-600">ID CJ: {product.supplier_product_id}</p>
+                    <p className="mt-1 text-sm text-slate-600">ID fornecedor: {product.supplier_product_id}</p>
                     <p className="mt-1 text-sm text-slate-600">Primeira variante: {variant?.supplier_variant_id || "sem ID"} - {variant?.sku}</p>
-                    <p className="mt-1 text-sm text-slate-600">Custo CJ: USD {variant?.cost ?? "0"} - Estoque {variant?.stock ?? 0}</p>
+                    <p className="mt-1 text-sm text-slate-600">Custo fornecedor: {variant?.cost ?? "0"} - Estoque {variant?.stock ?? 0}</p>
                   </div>
                   <button type="button" className="h-10 rounded-md bg-primary px-4 text-sm font-semibold text-white disabled:bg-slate-300" disabled={!variant?.supplier_variant_id || previewLoading === product.supplier_product_id} onClick={() => openPreview(product)}>
                     {previewLoading === product.supplier_product_id ? "Abrindo..." : "Configurar"}
@@ -393,7 +406,7 @@ export function AdminProductsPage() {
             <div className="mt-6 rounded-lg border border-slate-200">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-4">
                 <div>
-                  <p className="text-xs font-semibold uppercase text-primary">Previa de importacao CJ</p>
+                  <p className="text-xs font-semibold uppercase text-primary">Previa de importacao {importProvider === "aliexpress" ? "AliExpress" : "CJ"}</p>
                   <h3 className="mt-1 text-lg font-semibold">{draft.name}</h3>
                 </div>
                 <div className="flex gap-2">
@@ -426,7 +439,7 @@ export function AdminProductsPage() {
                       <input className="h-10 rounded-md border border-slate-200 px-3 font-normal" value={draft.sku} onChange={(event) => setDraft({ ...draft, sku: event.target.value })} />
                     </label>
                     <div className="rounded-md bg-blue-50 p-3 text-sm text-slate-700 md:col-span-2">
-                      Produto CJ {preview.supplier_product_id}. Se vender, o pedido guarda a variante CJ exata para criar o pedido no fornecedor depois do pagamento.
+                      Produto {importProvider === "aliexpress" ? "AliExpress" : "CJ"} {preview.supplier_product_id}. Se vender, o pedido guarda a variante exata para criar o pedido no fornecedor depois do pagamento.
                     </div>
                   </div>
                 ) : null}
@@ -438,12 +451,12 @@ export function AdminProductsPage() {
                         <tr className="border-b border-slate-200 text-left text-xs uppercase text-slate-500">
                           <th className="px-2 py-2">Usar</th>
                           <th className="px-2 py-2">Imagem</th>
-                          <th className="px-2 py-2">SKU CJ</th>
-                          <th className="px-2 py-2">Opcoes CJ</th>
+                          <th className="px-2 py-2">SKU fornecedor</th>
+                          <th className="px-2 py-2">Opcoes fornecedor</th>
                           <th className="px-2 py-2">Cor</th>
                           <th className="px-2 py-2">Tamanho</th>
                           <th className="px-2 py-2">Nome da opcao</th>
-                          <th className="px-2 py-2">Custo CJ</th>
+                          <th className="px-2 py-2">Custo</th>
                           <th className="px-2 py-2">Seu preco</th>
                           <th className="px-2 py-2">Estoque</th>
                         </tr>
@@ -465,7 +478,7 @@ export function AdminProductsPage() {
                         ))}
                       </tbody>
                     </table>
-                    <p className="mt-3 text-sm text-slate-600">{selectedVariants.length} variantes selecionadas. Seu preco e o valor que aparece no catalogo; custo CJ fica salvo para margem e fornecedor.</p>
+                    <p className="mt-3 text-sm text-slate-600">{selectedVariants.length} variantes selecionadas. Seu preco e o valor que aparece no catalogo; o custo fica salvo para margem e fornecedor.</p>
                   </div>
                 ) : null}
 
@@ -497,9 +510,9 @@ export function AdminProductsPage() {
                       <input className="h-10 rounded-md border border-slate-200 px-3 text-sm" value={shippingAddress.city} onChange={(event) => setShippingAddress({ ...shippingAddress, city: event.target.value })} placeholder="Cidade" />
                       <input className="h-10 rounded-md border border-slate-200 px-3 text-sm" value={shippingAddress.postal_code} onChange={(event) => setShippingAddress({ ...shippingAddress, postal_code: event.target.value })} placeholder="CEP" />
                     </div>
-                    <button type="button" className="w-fit rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white" onClick={testShipping} disabled={shippingLoading}>{shippingLoading ? "Consultando CJ..." : "Testar entrega das variantes selecionadas"}</button>
+                    <button type="button" className="w-fit rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white" onClick={testShipping} disabled={shippingLoading}>{shippingLoading ? "Consultando fornecedor..." : "Testar entrega das variantes selecionadas"}</button>
                     {shippingError ? <div className="rounded-md bg-red-50 p-3 text-sm text-danger">{shippingError}</div> : null}
-                    {shippingCheckedVariants ? <div className="rounded-md bg-green-50 p-3 text-sm text-emerald-700">CJ retornou entrega para {shippingCheckedVariants} variante(s). Estes valores vêm da CJ para país, rota, peso e método. Em alguns métodos internacionais, CEPs diferentes do mesmo país podem retornar o mesmo preço.</div> : null}
+                    {shippingCheckedVariants ? <div className="rounded-md bg-green-50 p-3 text-sm text-emerald-700">Fornecedor retornou entrega para {shippingCheckedVariants} variante(s). Estes valores vem da API para pais, rota, peso e metodo. Em rotas internacionais, CEPs diferentes do mesmo pais podem retornar o mesmo preco.</div> : null}
                     {shippingQuotes.length ? (
                       <div className="grid gap-2 md:grid-cols-3">
                         {shippingQuotes.map((quote) => (
@@ -508,7 +521,7 @@ export function AdminProductsPage() {
                             <p className="mt-1">{formatMoney(Number(quote.amount), quote.currency)}</p>
                             <p className="mt-1 text-slate-600">{quote.min_days} a {quote.max_days} dias uteis</p>
                             <p className="mt-1 text-slate-600">{quote.tracking_available ? "Rastreamento disponível" : "Rastreamento não informado"}</p>
-                            <p className="mt-1 text-xs text-slate-400">Método CJ: {quote.name}</p>
+                            <p className="mt-1 text-xs text-slate-400">Metodo original: {quote.name}</p>
                           </div>
                         ))}
                       </div>
@@ -535,7 +548,7 @@ export function AdminProductsPage() {
         <form onSubmit={saveEdit} className="mb-5 grid gap-3 rounded-lg border border-slate-200 bg-white p-5 shadow-sm md:grid-cols-6">
           <input className="h-10 rounded-md border border-slate-200 px-3 text-sm md:col-span-2" placeholder="Nome do produto" value={editForm.name} onChange={(event) => setEditForm({ ...editForm, name: event.target.value })} required />
           <input className="h-10 rounded-md border border-slate-200 px-3 text-sm" placeholder="Seu preco de venda" value={editForm.sale_price} onChange={(event) => setEditForm({ ...editForm, sale_price: event.target.value })} required />
-          <input className="h-10 rounded-md border border-slate-200 px-3 text-sm" placeholder="Custo CJ" value={editForm.cost_price} onChange={(event) => setEditForm({ ...editForm, cost_price: event.target.value })} required />
+          <input className="h-10 rounded-md border border-slate-200 px-3 text-sm" placeholder="Custo fornecedor" value={editForm.cost_price} onChange={(event) => setEditForm({ ...editForm, cost_price: event.target.value })} required />
           <input className="h-10 rounded-md border border-slate-200 px-3 text-sm md:col-span-2" placeholder="Resumo" value={editForm.short_description} onChange={(event) => setEditForm({ ...editForm, short_description: event.target.value })} />
           <textarea className="min-h-24 rounded-md border border-slate-200 px-3 py-2 text-sm md:col-span-5" placeholder="Descricao completa" value={editForm.description} onChange={(event) => setEditForm({ ...editForm, description: event.target.value })} />
           <div className="flex gap-2">

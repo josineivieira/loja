@@ -42,6 +42,10 @@ class Settings(BaseSettings):
     aliexpress_access_token: str = Field(default="", repr=False)
     aliexpress_refresh_token: str = Field(default="", repr=False)
     aliexpress_sandbox: bool = True
+    aliexpress_price_markup_multiplier: float = 2.2
+    aliexpress_price_markup_fixed: float = 4.9
+    aliexpress_shipping_markup_multiplier: float = 1.0
+    aliexpress_shipping_markup_fixed: float = 0
 
     @field_validator("database_url")
     @classmethod

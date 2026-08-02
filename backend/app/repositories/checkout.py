@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.order import Coupon, Order, ShippingMethod
-from app.models.product import ProductVariant
+from app.models.product import Product, ProductVariant
 
 
 class CheckoutRepository:
@@ -14,7 +14,7 @@ class CheckoutRepository:
     def get_variants(self, variant_ids: list[uuid.UUID]) -> list[ProductVariant]:
         statement = (
             select(ProductVariant)
-            .options(selectinload(ProductVariant.product))
+            .options(selectinload(ProductVariant.product).selectinload(Product.supplier))
             .where(ProductVariant.id.in_(variant_ids), ProductVariant.status == "active")
         )
         return list(self.db.scalars(statement))

@@ -11,6 +11,8 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.integrations.aliexpress.exceptions import AliExpressError
+from app.integrations.aliexpress.provider import AliExpressProvider
 from app.integrations.cj_dropshipping.cj_provider import CJDropshippingProvider
 from app.integrations.cj_dropshipping.exceptions import CJDropshippingError
 from app.integrations.cj_dropshipping.manual_provider import ManualSupplierProvider
@@ -35,6 +37,7 @@ class SupplierService:
     def __init__(self, db: Session):
         self.repo = SupplierRepository(db)
         self.provider = CJDropshippingProvider() if settings.supplier_provider.lower() == "cj" else ManualSupplierProvider()
+        self.aliexpress = AliExpressProvider()
 
     def list_pending(self) -> list[Order]:
         return self.repo.list_pending_orders()
@@ -57,6 +60,22 @@ class SupplierService:
         if not detail:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CJ product detail was not found")
         return self._map_supplier_product(detail)
+
+    def search_aliexpress_products(self, query: str) -> list[SupplierProductRead]:
+        if not query.strip():
+            return []
+        try:
+            products = self.aliexpress.search_products(query)
+        except AliExpressError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        return [self._map_supplier_product(item, provider="aliexpress") for item in products[:20]]
+
+    def preview_aliexpress_product(self, supplier_product_id: str) -> SupplierProductRead:
+        try:
+            detail = self.aliexpress.get_product(supplier_product_id)
+        except AliExpressError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        return self._map_supplier_product(detail, provider="aliexpress")
 
     def estimate_cj_shipping(self, payload: SupplierVariantShippingEstimateRequest) -> list[SupplierVariantShippingEstimateRead]:
         try:
@@ -88,6 +107,38 @@ class SupplierService:
             )
         if not estimates:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="CJ did not return shipping options for this destination")
+        return estimates
+
+    def estimate_aliexpress_shipping(self, payload: SupplierVariantShippingEstimateRequest) -> list[SupplierVariantShippingEstimateRead]:
+        try:
+            result = self.aliexpress.calculate_shipping(
+                {
+                    "supplierProductId": payload.supplier_product_id if hasattr(payload, "supplier_product_id") else None,
+                    "supplierVariantId": payload.supplier_variant_id,
+                    "quantity": payload.quantity,
+                    "country": payload.country.upper(),
+                    "state": payload.state,
+                    "city": payload.city,
+                    "postal_code": payload.postal_code,
+                    "currency": "BRL",
+                }
+            )
+        except AliExpressError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        estimates = [
+            SupplierVariantShippingEstimateRead(
+                code=item["code"],
+                name=f"AliExpress {item['name']}",
+                amount=item["amount"],
+                currency=item["currency"],
+                min_days=item["min_days"],
+                max_days=item["max_days"],
+                tracking_available=item["tracking_available"],
+            )
+            for item in result.get("quotes", [])
+        ]
+        if not estimates:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="AliExpress did not return shipping options for this destination")
         return estimates
 
     def import_cj_product(self, payload: SupplierProductImportRequest) -> Product:
@@ -159,6 +210,64 @@ class SupplierService:
         self.repo.db.refresh(product)
         return product
 
+    def import_aliexpress_product(self, payload: SupplierProductImportRequest) -> Product:
+        if self.repo.db.scalar(select(Product).where(Product.supplier_product_id == payload.supplier_product_id, Product.deleted_at.is_(None))):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="AliExpress product is already imported")
+        supplier = self._get_or_create_aliexpress_supplier()
+        name = self._clean_title(payload.name or "Produto AliExpress")
+        description = self._clean_description(payload.description or "")
+        short_description = self._summary(description, name, provider="AliExpress")
+        images = list(dict.fromkeys(payload.images or ([payload.image_url] if payload.image_url else [])))
+        variants = self._import_variants(payload)
+        if not variants:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Selecione pelo menos uma variante AliExpress valida")
+        product = Product(
+            supplier_id=supplier.id,
+            category_id=uuid.UUID(payload.category_id) if payload.category_id else None,
+            name=name,
+            slug=self._unique_slug(name),
+            short_description=short_description,
+            description=description,
+            sku=self._unique_sku(payload.sku.upper(), Product),
+            supplier_sku=self._short_text(payload.supplier_sku or payload.sku, 120),
+            supplier_product_id=payload.supplier_product_id,
+            cost_price=variants[0].cost,
+            sale_price=variants[0].price,
+            currency="BRL",
+            status="active",
+            featured=False,
+            is_new=True,
+            is_bestseller=False,
+        )
+        try:
+            self.repo.db.add(product)
+            self.repo.db.flush()
+            option_cache: dict[tuple[str, str], ProductOptionValue] = {}
+            for index, variant_data in enumerate(variants):
+                variant = ProductVariant(
+                    product_id=product.id,
+                    sku=self._unique_sku(f"{variant_data.sku.upper()}-AE", ProductVariant),
+                    supplier_variant_id=self._short_text(variant_data.supplier_variant_id, 120),
+                    price=variant_data.price,
+                    cost=variant_data.cost,
+                    stock=variant_data.stock,
+                    image_url=self._safe_url(variant_data.image_url or payload.image_url),
+                    status="active",
+                )
+                self.repo.db.add(variant)
+                self.repo.db.flush()
+                self._attach_variant_options(product, variant, variant_data.options or {"Opcao": variant_data.name or variant_data.sku}, description, index, option_cache)
+            for index, image_url in enumerate(images[:12]):
+                safe_image_url = self._safe_url(image_url)
+                if safe_image_url:
+                    self.repo.db.add(ProductImage(product_id=product.id, url=safe_image_url, alt_text=name[:255], sort_order=index, is_primary=index == 0))
+            self.repo.db.commit()
+        except SQLAlchemyError as exc:
+            self.repo.db.rollback()
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Nao foi possivel salvar este produto do AliExpress no banco: {exc.__class__.__name__}") from exc
+        self.repo.db.refresh(product)
+        return product
+
     def get_copyable_payload(self, order_number: str) -> SupplierOrderPayloadRead:
         order = self._get_order(order_number)
         address = order.addresses[0] if order.addresses else None
@@ -188,6 +297,7 @@ class SupplierService:
                     "variantSku": item.variant_sku,
                     "supplierSku": item.supplier_sku,
                     "supplierVariantId": item.supplier_variant_id,
+                    "supplierProductId": self._supplier_product_id_for_order_item(item),
                     "quantity": item.quantity,
                 }
                 for item in order.items
@@ -196,7 +306,21 @@ class SupplierService:
             "shippingMethodName": order.shipping_method_name,
             "notes": order.notes,
         }
-        if settings.supplier_provider.lower() == "cj" and not order.supplier_order_id:
+        provider_code = self._order_supplier_provider(order)
+        if provider_code == "aliexpress" and not order.supplier_order_id:
+            try:
+                provider_result = self.aliexpress.create_supplier_order({**copyable_payload, "sandbox": settings.aliexpress_sandbox})
+            except AliExpressError as exc:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+            order.supplier_provider = "aliexpress"
+            order.supplier_payload = provider_result["copyable_payload"]
+            if provider_result.get("supplier_order_id"):
+                order.supplier_order_id = provider_result["supplier_order_id"]
+                order.supplier_status = provider_result.get("supplier_status", "supplier_confirmed")
+                order.fulfillment_status = "supplier_confirmed"
+                self.repo.add_history(order, order.supplier_status, "Supplier order submitted through AliExpress API")
+            self.repo.commit()
+        elif settings.supplier_provider.lower() == "cj" and not order.supplier_order_id:
             try:
                 provider_result = self.provider.create_supplier_order(copyable_payload)
             except CJDropshippingError as exc:
@@ -323,6 +447,15 @@ class SupplierService:
         self.repo.db.flush()
         return supplier
 
+    def _get_or_create_aliexpress_supplier(self) -> Supplier:
+        supplier = self.repo.db.scalar(select(Supplier).where(Supplier.code == "aliexpress"))
+        if supplier:
+            return supplier
+        supplier = Supplier(name="AliExpress Dropshipping", code="aliexpress", notes="Automated AliExpress Open Platform supplier")
+        self.repo.db.add(supplier)
+        self.repo.db.flush()
+        return supplier
+
     def _release_deleted_import_conflicts(self, payload: SupplierProductImportRequest) -> None:
         variant_skus = [f"{variant.sku.upper()}-CJ" for variant in payload.variants if variant.sku]
         product_skus = [payload.sku.upper(), payload.supplier_sku.upper() if payload.supplier_sku else ""]
@@ -391,18 +524,21 @@ class SupplierService:
             index += 1
         return sku
 
-    def _map_supplier_product(self, item: dict[str, Any]) -> SupplierProductRead:
-        supplier_product_id = str(self._pick(item, "pid", "productId", "id", "supplierProductId", "productSku", "spu", "productCode", "productNo") or "")
-        name = self._clean_title(str(self._english_first(item, "productNameEn", "nameEn", "title", "productTitle", "variantNameEn", "productName", "productNameCn", "name") or "CJ Product"))
-        image_url = self._first_image(self._pick(item, "productImage", "productImageSet", "image", "imageUrl", "productImages", "variantImage"))
-        variants_raw = self._pick(item, "variants", "variantList", "variantsList", "productVariantList") or []
+    def _map_supplier_product(self, item: dict[str, Any], provider: str = "cj") -> SupplierProductRead:
+        fallback = "AliExpress Product" if provider == "aliexpress" else "CJ Product"
+        supplier_product_id = str(self._pick(item, "pid", "productId", "product_id", "ae_product_id", "id", "supplierProductId", "productSku", "spu", "productCode", "productNo") or "")
+        name = self._clean_title(str(self._english_first(item, "subject", "product_title", "productTitle", "productNameEn", "nameEn", "title", "variantNameEn", "productName", "productNameCn", "name") or fallback))
+        image_url = self._first_image(self._pick(item, "product_main_image_url", "productImage", "productImageSet", "image", "imageUrl", "productImages", "variantImage", "product_small_image_urls"))
+        variants_raw = self._pick(item, "variants", "variantList", "variantsList", "productVariantList", "ae_item_sku_info_dtos", "sku_info_list", "skuInfoList") or []
+        if isinstance(variants_raw, dict):
+            variants_raw = variants_raw.get("ae_item_sku_info_d_t_o") or variants_raw.get("sku_info") or variants_raw.get("item") or []
         variants = [self._map_supplier_variant(variant, name, image_url) for variant in variants_raw if isinstance(variant, dict)]
         if not variants:
             supplier_variant_id = str(self._pick(item, "vid", "variantId", "id") or supplier_product_id)
             variants = [
                 SupplierProductVariantRead(
                     supplier_variant_id=supplier_variant_id,
-                    sku=str(self._pick(item, "productSku", "sku", "productNum") or f"CJ-{supplier_product_id}"),
+                    sku=str(self._pick(item, "productSku", "sku", "sku_code", "productNum") or f"{provider.upper()}-{supplier_product_id}"),
                     name=name,
                     options=self._variant_options_from_raw(item, name),
                     price=self._decimal(self._pick(item, "sellPrice", "price", "productPrice", "listedPrice"), Decimal("0")),
@@ -411,12 +547,12 @@ class SupplierService:
                     image_url=image_url,
                 )
             ]
-        description = self._clean_description(str(self._pick(item, "description", "productDescription", "productDescriptionEn", "descriptionEn") or ""))
+        description = self._clean_description(str(self._pick(item, "product_detail", "description", "productDescription", "productDescriptionEn", "descriptionEn") or ""))
         variants = self._normalize_supplier_variants(variants, f"{name} {description}")
         return SupplierProductRead(
             supplier_product_id=supplier_product_id,
             name=name,
-            sku=str(self._pick(item, "productSku", "sku", "productNum") or f"CJ-{supplier_product_id}"),
+            sku=str(self._pick(item, "productSku", "sku", "productNum") or f"{provider.upper()}-{supplier_product_id}"),
             description=description,
             image_url=image_url,
             images=self._images(item, image_url),
@@ -526,22 +662,22 @@ class SupplierService:
         cleaned = re.sub(r"\s+", " ", cleaned)
         return cleaned[:180] or "CJ Product"
 
-    def _summary(self, description: str, fallback: str) -> str:
+    def _summary(self, description: str, fallback: str, provider: str = "CJ") -> str:
         if description:
             return description[:500]
-        return f"{fallback} imported from CJ with supplier variant data ready for checkout and fulfillment."
+        return f"{fallback} importado do {provider} com variacoes prontas para checkout, frete e envio pelo fornecedor."
 
     def _map_supplier_variant(self, item: dict[str, Any], fallback_name: str, fallback_image: str | None) -> SupplierProductVariantRead:
         price = self._decimal(self._pick(item, "sellPrice", "price", "variantSellPrice", "listedPrice"), Decimal("0"))
         return SupplierProductVariantRead(
-            supplier_variant_id=str(self._pick(item, "vid", "variantId", "id", "supplierVariantId") or ""),
-            sku=str(self._pick(item, "variantSku", "sku", "variantKey", "variantNameEn") or "CJ-VARIANT"),
-            name=self._english_first(item, "variantNameEn", "nameEn", "variantKey", "variantName", "name") or fallback_name,
+            supplier_variant_id=str(self._pick(item, "vid", "variantId", "sku_attr", "skuId", "sku_id", "id", "supplierVariantId") or ""),
+            sku=str(self._pick(item, "variantSku", "sku", "sku_code", "skuCode", "variantKey", "variantNameEn") or "SUPPLIER-VARIANT"),
+            name=self._english_first(item, "variantNameEn", "sku_attr", "nameEn", "variantKey", "variantName", "name") or fallback_name,
             options=self._variant_options_from_raw(item, fallback_name),
             price=price,
-            cost=self._decimal(self._pick(item, "costPrice", "variantStandard", "standard", "price"), price),
-            stock=int(self._decimal(self._pick(item, "stock", "inventory", "sellableQuantity"), Decimal("999"))),
-            image_url=self._first_image(self._pick(item, "variantImage", "image", "imageUrl")) or fallback_image,
+            cost=self._decimal(self._pick(item, "costPrice", "variantStandard", "standard", "sku_price", "offer_sale_price", "price"), price),
+            stock=int(self._decimal(self._pick(item, "stock", "inventory", "sellableQuantity", "ipm_sku_stock"), Decimal("999"))),
+            image_url=self._first_image(self._pick(item, "variantImage", "sku_image", "image", "imageUrl")) or fallback_image,
         )
 
     def _normalize_supplier_variants(self, variants: list[SupplierProductVariantRead], product_text: str) -> list[SupplierProductVariantRead]:
@@ -763,9 +899,9 @@ class SupplierService:
     def _variant_options_from_raw(self, item: dict[str, Any], fallback_name: str) -> dict[str, str]:
         options: dict[str, str] = {}
         direct_fields = {
-            "Color": self._pick(item, "color", "colour", "Color", "variantColor"),
-            "Size": self._pick(item, "size", "Size", "variantSize"),
-            "Capacity": self._pick(item, "capacity", "Capacity", "capacidade"),
+            "Color": self._pick(item, "color", "colour", "Color", "variantColor", "sku_color"),
+            "Size": self._pick(item, "size", "Size", "variantSize", "sku_size"),
+            "Capacity": self._pick(item, "capacity", "Capacity", "capacidade", "sku_capacity"),
             "Style": self._pick(item, "style", "Style", "variantStyle"),
         }
         for key, value in direct_fields.items():
@@ -773,7 +909,7 @@ class SupplierService:
                 options[key] = str(value).strip()
         candidates = [
             self._pick(item, "variantNameEn", "variantName", "variantKey", "name"),
-            self._pick(item, "variantSku", "sku"),
+            self._pick(item, "sku_attr", "variantSku", "sku"),
             fallback_name,
         ]
         text = " / ".join(str(value) for value in candidates if value)
@@ -825,6 +961,19 @@ class SupplierService:
     def _extract_capacity(self, value: str) -> str | None:
         match = re.search(r"\b(\d{2,5}\s*(?:mah|ml|l|gb|tb|w))\b", value, flags=re.IGNORECASE)
         return re.sub(r"\s+", "", match.group(1)).lower() if match else None
+
+    def _order_supplier_provider(self, order: Order) -> str:
+        for item in order.items:
+            variant = self.repo.db.get(ProductVariant, item.variant_id)
+            if variant and variant.product and variant.product.supplier and variant.product.supplier.code:
+                return variant.product.supplier.code
+        return settings.supplier_provider.lower()
+
+    def _supplier_product_id_for_order_item(self, item: Any) -> str | None:
+        variant = self.repo.db.get(ProductVariant, item.variant_id)
+        if variant and variant.product:
+            return variant.product.supplier_product_id
+        return None
 
     def _pick(self, data: dict[str, Any], *keys: str) -> Any:
         for key in keys:

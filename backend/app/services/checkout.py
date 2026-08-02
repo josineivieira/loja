@@ -5,6 +5,8 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.integrations.aliexpress.exceptions import AliExpressError
+from app.integrations.aliexpress.provider import AliExpressProvider
 from app.integrations.cj_dropshipping.cj_provider import CJDropshippingProvider
 from app.integrations.cj_dropshipping.exceptions import CJDropshippingError
 from app.models.order import Order, OrderAddress, OrderItem, OrderStatusHistory
@@ -31,6 +33,7 @@ class CheckoutService:
         self.db = db
         self.repo = CheckoutRepository(db)
         self.cj = CJDropshippingProvider() if settings.supplier_provider.lower() == "cj" else None
+        self.aliexpress = AliExpressProvider()
 
     def calculate(self, payload: CheckoutCalculateRequest) -> CheckoutCalculationResponse:
         variant_ids = [item.variant_id for item in payload.items]
@@ -88,6 +91,15 @@ class CheckoutService:
         selected_shipping = self._select_shipping(calculation.totals.shipping_method_code, calculation.shipping_methods)
         order_number = self._make_order_number()
         address = payload.address
+        order_variants = {variant.id: variant for variant in self.repo.get_variants([item.variant_id for item in payload.items])}
+        supplier_provider = next(
+            (
+                variant.product.supplier.code
+                for variant in order_variants.values()
+                if variant.product and variant.product.supplier and variant.product.supplier.code
+            ),
+            settings.supplier_provider.lower(),
+        )
         order = Order(
             order_number=order_number,
             customer_id=customer_id,
@@ -110,6 +122,7 @@ class CheckoutService:
             shipping_min_days=selected_shipping.min_days,
             shipping_max_days=selected_shipping.max_days,
             shipping_tracking_available=selected_shipping.tracking_available,
+            supplier_provider=supplier_provider,
             notes=address.notes,
         )
         order.items = [
@@ -198,6 +211,9 @@ class CheckoutService:
         return Decimal("0.00")
 
     def _shipping_quotes(self, country: str | None, subtotal: Decimal, currency: str, payload: CheckoutCalculateRequest, lines: list[CheckoutLine]) -> list[ShippingQuote]:
+        aliexpress_quotes = self._aliexpress_shipping_quotes(payload, lines, currency)
+        if aliexpress_quotes:
+            return aliexpress_quotes
         cj_quotes = self._cj_shipping_quotes(payload, lines, currency)
         if cj_quotes:
             return cj_quotes
@@ -259,6 +275,50 @@ class CheckoutService:
                     tracking_available=item["tracking_available"],
                 )
             )
+        return self._best_shipping_quotes(quotes)
+
+    def _aliexpress_shipping_quotes(self, payload: CheckoutCalculateRequest, lines: list[CheckoutLine], currency: str) -> list[ShippingQuote]:
+        if not payload.address or not lines or not all(line.supplier_variant_id for line in lines):
+            return []
+        variants = {variant.id: variant for variant in self.repo.get_variants([line.variant_id for line in lines])}
+        ali_lines = []
+        for line in lines:
+            variant = variants.get(line.variant_id)
+            supplier_code = variant.product.supplier.code if variant and variant.product and variant.product.supplier else ""
+            if supplier_code != "aliexpress":
+                return []
+            ali_lines.append((line, variant))
+        quotes: list[ShippingQuote] = []
+        try:
+            for line, variant in ali_lines:
+                result = self.aliexpress.calculate_shipping(
+                    {
+                        "product_id": variant.product.supplier_product_id,
+                        "supplierVariantId": line.supplier_variant_id,
+                        "quantity": line.quantity,
+                        "country": payload.address.country.upper(),
+                        "state": payload.address.state,
+                        "city": payload.address.city,
+                        "postal_code": payload.address.postal_code,
+                        "currency": currency,
+                    }
+                )
+                if not quotes:
+                    for item in result.get("quotes", []):
+                        amount = money((Decimal(str(item["amount"])) * Decimal(str(settings.aliexpress_shipping_markup_multiplier))) + Decimal(str(settings.aliexpress_shipping_markup_fixed)))
+                        quotes.append(
+                            ShippingQuote(
+                                code=item["code"],
+                                name=f"AliExpress {item['name']}",
+                                amount=amount,
+                                currency=currency,
+                                min_days=item["min_days"],
+                                max_days=item["max_days"],
+                                tracking_available=item["tracking_available"],
+                            )
+                        )
+        except AliExpressError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"AliExpress shipping error: {exc}") from exc
         return self._best_shipping_quotes(quotes)
 
     def _best_shipping_quotes(self, quotes: list[ShippingQuote]) -> list[ShippingQuote]:

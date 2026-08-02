@@ -98,6 +98,7 @@ class SupplierProductImportRequest(BaseModel):
 
 class SupplierVariantShippingEstimateRequest(BaseModel):
     supplier_variant_id: str = Field(min_length=2, max_length=120)
+    supplier_product_id: str | None = Field(default=None, max_length=120)
     quantity: int = Field(default=1, ge=1, le=99)
     country: str = Field(min_length=2, max_length=2)
     state: str = Field(min_length=1, max_length=100)

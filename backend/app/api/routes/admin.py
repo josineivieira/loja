@@ -13,6 +13,8 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies.auth import require_roles
 from app.database.session import get_db
+from app.integrations.aliexpress.client import AliExpressClient
+from app.integrations.aliexpress.exceptions import AliExpressError
 from app.models.user import User
 from app.schemas.admin import (
     AdminCustomerRead,
@@ -203,7 +205,7 @@ def integration_status(_: AdminUser) -> IntegrationStatusRead:
         supplier_provider=settings.supplier_provider,
         cj_configured=bool(settings.cj_api_key or settings.cj_platform_token),
         cj_sandbox=settings.cj_sandbox,
-        aliexpress_configured=bool(settings.aliexpress_app_key and settings.aliexpress_app_secret),
+        aliexpress_configured=bool(settings.aliexpress_app_key and settings.aliexpress_app_secret and settings.aliexpress_access_token),
         aliexpress_sandbox=settings.aliexpress_sandbox,
         email_provider=settings.email_provider or "log",
         email_configured=bool(settings.email_api_key),
@@ -237,6 +239,18 @@ def aliexpress_oauth_callback(code: str | None = None, state: str | None = None,
     exchanged = _exchange_aliexpress_code(code)
     exchanged.state = state
     return exchanged
+
+
+@router.post("/aliexpress/oauth/refresh")
+def refresh_aliexpress_token(_: AdminUser) -> dict[str, object]:
+    try:
+        data = AliExpressClient().refresh_access_token()
+    except AliExpressError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return {
+        "message": "AliExpress token refreshed. Copy any new access_token or refresh_token returned to Render.",
+        "raw_response": data,
+    }
 
 
 @router.post("/categories", response_model=CategoryRead, status_code=201)
@@ -346,6 +360,35 @@ def import_cj_product(payload: SupplierProductImportRequest, _: AdminUser, db: A
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Nao foi possivel importar este produto da CJ: {exc.__class__.__name__}",
+        ) from exc
+
+
+@router.get("/supplier/aliexpress/products", response_model=list[SupplierProductRead])
+def search_aliexpress_products(q: Annotated[str, Query(min_length=2)], _: AdminUser, db: Annotated[Session, Depends(get_db)]) -> list[SupplierProductRead]:
+    return SupplierService(db).search_aliexpress_products(q)
+
+
+@router.get("/supplier/aliexpress/products/{supplier_product_id}", response_model=SupplierProductRead)
+def preview_aliexpress_product(supplier_product_id: str, _: AdminUser, db: Annotated[Session, Depends(get_db)]) -> SupplierProductRead:
+    return SupplierService(db).preview_aliexpress_product(supplier_product_id)
+
+
+@router.post("/supplier/aliexpress/shipping-estimate", response_model=list[SupplierVariantShippingEstimateRead])
+def estimate_aliexpress_shipping(payload: SupplierVariantShippingEstimateRequest, _: AdminUser, db: Annotated[Session, Depends(get_db)]) -> list[SupplierVariantShippingEstimateRead]:
+    return SupplierService(db).estimate_aliexpress_shipping(payload)
+
+
+@router.post("/supplier/aliexpress/import", response_model=ProductRead, status_code=201)
+def import_aliexpress_product(payload: SupplierProductImportRequest, _: AdminUser, db: Annotated[Session, Depends(get_db)]) -> ProductRead:
+    try:
+        return SupplierService(db).import_aliexpress_product(payload)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Nao foi possivel importar este produto do AliExpress: {exc.__class__.__name__}",
         ) from exc
 
 

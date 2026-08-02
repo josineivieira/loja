@@ -1,0 +1,2 @@
+class AliExpressError(Exception):
+    pass

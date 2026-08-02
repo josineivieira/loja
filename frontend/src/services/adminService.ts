@@ -97,13 +97,24 @@ export async function searchCjProducts(query: string) {
   return data;
 }
 
+export async function searchAliExpressProducts(query: string) {
+  const { data } = await api.get<SupplierProduct[]>("/admin/supplier/aliexpress/products", { params: { q: query } });
+  return data;
+}
+
 export async function previewCjProduct(productId: string) {
   const { data } = await api.get<SupplierProduct>(`/admin/supplier/cj/products/${productId}`);
   return data;
 }
 
+export async function previewAliExpressProduct(productId: string) {
+  const { data } = await api.get<SupplierProduct>(`/admin/supplier/aliexpress/products/${productId}`);
+  return data;
+}
+
 export async function estimateCjVariantShipping(payload: {
   supplier_variant_id: string;
+  supplier_product_id?: string;
   quantity: number;
   country: string;
   state: string;
@@ -111,6 +122,19 @@ export async function estimateCjVariantShipping(payload: {
   postal_code: string;
 }) {
   const { data } = await api.post<SupplierShippingEstimate[]>("/admin/supplier/cj/shipping-estimate", payload);
+  return data;
+}
+
+export async function estimateAliExpressVariantShipping(payload: {
+  supplier_variant_id: string;
+  supplier_product_id?: string;
+  quantity: number;
+  country: string;
+  state: string;
+  city: string;
+  postal_code: string;
+}) {
+  const { data } = await api.post<SupplierShippingEstimate[]>("/admin/supplier/aliexpress/shipping-estimate", payload);
   return data;
 }
 
@@ -147,6 +171,42 @@ export async function importCjProduct(payload: {
       ? detail.map((item) => item?.msg || JSON.stringify(item)).join("; ")
       : detail;
     throw new Error(typeof message === "string" ? message : "Nao foi possivel importar este produto da CJ.");
+  }
+}
+
+export async function importAliExpressProduct(payload: {
+  supplier_product_id: string;
+  name: string;
+  sku: string;
+  sale_price: number;
+  cost_price: number;
+  stock: number;
+  supplier_variant_id: string;
+  supplier_sku?: string;
+  description?: string | null;
+  image_url?: string | null;
+  images?: string[];
+  variants?: Array<{
+    supplier_variant_id: string;
+    sku: string;
+    name?: string | null;
+    options?: Record<string, string>;
+    sale_price: number;
+    cost_price: number;
+    stock: number;
+    image_url?: string | null;
+    selected: boolean;
+  }>;
+}) {
+  try {
+    const { data } = await api.post<Product>("/admin/supplier/aliexpress/import", payload);
+    return data;
+  } catch (error) {
+    const detail = isAxiosError(error) ? error.response?.data?.detail : undefined;
+    const message = Array.isArray(detail)
+      ? detail.map((item) => item?.msg || JSON.stringify(item)).join("; ")
+      : detail;
+    throw new Error(typeof message === "string" ? message : "Nao foi possivel importar este produto do AliExpress.");
   }
 }
 
