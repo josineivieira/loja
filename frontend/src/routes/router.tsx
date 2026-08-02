@@ -2,17 +2,21 @@ import { createBrowserRouter } from "react-router-dom";
 
 import { PublicLayout } from "../layouts/PublicLayout";
 import { AdminLayout } from "../layouts/AdminLayout";
+import { AccountPage } from "../pages/AccountPage";
 import { CartPage } from "../pages/CartPage";
 import { CatalogPage } from "../pages/CatalogPage";
 import { CategoryPage } from "../pages/CategoryPage";
 import { CheckoutPage } from "../pages/CheckoutPage";
 import { HomePage } from "../pages/HomePage";
 import { FavoritesPage } from "../pages/FavoritesPage";
+import { LoginPage } from "../pages/LoginPage";
 import { NotFoundPage } from "../pages/NotFoundPage";
+import { OrdersPage } from "../pages/OrdersPage";
 import { PlaceholderPage } from "../pages/PlaceholderPage";
 import { ProductPage } from "../pages/ProductPage";
 import { OrderConfirmationPage } from "../pages/OrderConfirmationPage";
 import { OrderDetailsPage } from "../pages/OrderDetailsPage";
+import { RegisterPage } from "../pages/RegisterPage";
 import { SearchPage } from "../pages/SearchPage";
 import { TrackingPage } from "../pages/TrackingPage";
 import { AdminCouponsPage } from "../pages/admin/AdminCouponsPage";
@@ -63,11 +67,11 @@ export const router = createBrowserRouter([
       { path: "/checkout", element: <CheckoutPage /> },
       { path: "/order-confirmation", element: <OrderConfirmationPage /> },
       { path: "/track-order", element: <TrackingPage /> },
-      { path: "/login", element: <PlaceholderPage title="Login" /> },
-      { path: "/register", element: <PlaceholderPage title="Register" /> },
+      { path: "/login", element: <LoginPage /> },
+      { path: "/register", element: <RegisterPage /> },
       { path: "/forgot-password", element: <PlaceholderPage title="Password recovery" /> },
-      { path: "/account", element: <PlaceholderPage title="My account" /> },
-      { path: "/orders", element: <PlaceholderPage title="My orders" /> },
+      { path: "/account", element: <AccountPage /> },
+      { path: "/orders", element: <OrdersPage /> },
       { path: "/orders/:orderNumber", element: <OrderDetailsPage /> },
       { path: "/favorites", element: <FavoritesPage /> },
       { path: "/about", element: <PlaceholderPage title="About us" /> },
