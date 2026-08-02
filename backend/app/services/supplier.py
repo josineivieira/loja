@@ -575,7 +575,21 @@ class SupplierService:
     def _translate_option_label(self, option_name: str, value: str) -> str:
         cleaned = str(value).strip()
         if option_name != "color":
-            return cleaned.upper() if option_name == "size" and len(cleaned) <= 4 else cleaned
+            if option_name == "size":
+                return {
+                    "XS": "PP",
+                    "S": "P",
+                    "M": "M",
+                    "L": "G",
+                    "XL": "GG",
+                    "XXL": "XGG",
+                    "2XL": "XGG",
+                    "XXXL": "EXG",
+                    "3XL": "EXG",
+                    "4XL": "G4",
+                    "5XL": "G5",
+                }.get(cleaned.upper(), cleaned.upper() if len(cleaned) <= 4 else cleaned)
+            return cleaned
         return {
             "white": "Branco",
             "beige": "Bege",
@@ -670,7 +684,10 @@ class SupplierService:
             capacity = self._extract_capacity(text)
             if capacity:
                 options["Capacity"] = capacity
-        return options
+        return {
+            key: self._translate_option_label(self._normalize_option_name(key), value)
+            for key, value in options.items()
+        }
 
     def _extract_color(self, value: str) -> str | None:
         colors = {

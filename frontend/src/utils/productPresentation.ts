@@ -21,6 +21,14 @@ const genericDescription: Record<Language, string> = {
 
 const titleRules: Array<{ match: RegExp; title: Record<Language, string> }> = [
   {
+    match: /men'?s\s+shirt|button\s+down\s+shirt|long\s+sleeve\s+lapel|business\s+shirt|casual\s+tops|camisa/i,
+    title: {
+      en: "Men's long sleeve button-down shirt",
+      pt: "Camisa masculina manga longa",
+      es: "Camisa masculina de manga larga",
+    },
+  },
+  {
     match: /solid color flat|walking shoes|comfortable all-match|casual lightweight|flat sneaker|单鞋|鞋/i,
     title: {
       en: "Lightweight casual flat shoes",
@@ -88,6 +96,14 @@ const titleRules: Array<{ match: RegExp; title: Record<Language, string> }> = [
 ];
 
 const descriptionRules: Array<{ match: RegExp; description: Record<Language, string> }> = [
+  {
+    match: /men'?s\s+shirt|button\s+down\s+shirt|long\s+sleeve\s+lapel|business\s+shirt|casual\s+tops|camisa/i,
+    description: {
+      en: "Men's long sleeve button-down shirt with a clean casual-business look. Choose the color and Brazilian size before adding it to the cart.",
+      pt: "Camisa masculina de manga longa com visual casual social. Escolha a cor e o tamanho brasileiro antes de adicionar ao carrinho.",
+      es: "Camisa masculina de manga larga con estilo casual elegante. Elige el color y la talla antes de agregar al carrito.",
+    },
+  },
   {
     match: /solid color flat|walking shoes|comfortable all-match|casual lightweight|flat sneaker|单鞋|鞋/i,
     description: {
@@ -200,6 +216,23 @@ function containsCjk(value: string) {
   return /[\u3400-\u9fff]/.test(value);
 }
 
+function localSizeLabel(value: string, language: Language) {
+  if (language !== "pt") return value;
+  return {
+    XS: "PP",
+    S: "P",
+    M: "M",
+    L: "G",
+    XL: "GG",
+    XXL: "XGG",
+    "2XL": "XGG",
+    XXXL: "EXG",
+    "3XL": "EXG",
+    "4XL": "G4",
+    "5XL": "G5",
+  }[value.toUpperCase()] ?? value;
+}
+
 export function presentSupplierName(name?: string | null, description?: string | null, language: Language = "pt") {
   const source = `${name ?? ""} ${description ?? ""}`;
   const rule = titleRules.find((item) => item.match.test(source));
@@ -291,6 +324,6 @@ export function variantDisplayOptions(product: Product, variant: ProductVariant,
     .filter((item) => /^(XXS|XS|S|M|L|XL|XXL|XXXL|2XL|3XL|4XL|5XL|\d{2,3})$/.test(item));
   const alphaSizes = sizes?.filter((item) => /[A-Z]/.test(item));
   if (alphaSizes?.length) sizes = alphaSizes;
-  if (sizes?.length) options[labels.size] = sizes[index % sizes.length];
+  if (sizes?.length) options[labels.size] = localSizeLabel(sizes[index % sizes.length], language);
   return options;
 }
