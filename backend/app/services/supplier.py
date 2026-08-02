@@ -332,7 +332,7 @@ class SupplierService:
         return sku
 
     def _map_supplier_product(self, item: dict[str, Any]) -> SupplierProductRead:
-        supplier_product_id = str(self._pick(item, "pid", "productId", "id", "supplierProductId") or "")
+        supplier_product_id = str(self._pick(item, "pid", "productId", "id", "supplierProductId", "productSku", "spu", "productCode", "productNo") or "")
         name = self._clean_title(str(self._pick(item, "productName", "name", "title", "productTitle") or "CJ Product"))
         image_url = self._first_image(self._pick(item, "productImage", "productImageSet", "image", "imageUrl", "productImages"))
         variants_raw = self._pick(item, "variants", "variantList", "variantsList", "productVariantList") or []

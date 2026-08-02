@@ -22,33 +22,17 @@ class CJDropshippingProvider(SupplierProvider):
         if is_cj_identifier:
             results.extend(self._my_products(normalized))
             results.extend(self._products_from_variant_query(normalized))
-            for identifier in self._product_identifier_candidates(normalized):
-                try:
-                    product = self.get_product(identifier)
-                    if isinstance(product, dict) and product:
-                        results.append(product)
-                except CJDropshippingError:
-                    pass
+            try:
+                product = self.get_product(normalized)
+                if isinstance(product, dict) and product:
+                    results.append(product)
+            except CJDropshippingError:
+                pass
             exact_results = [product for product in self._dedupe_products(results) if self._product_matches_query(product, normalized)]
             if exact_results:
                 return exact_results
             results = []
-        attempts = [
-            {"productCode": normalized},
-            {"productNo": normalized},
-            {"productId": normalized},
-            {"spu": normalized},
-            {"sku": normalized},
-            {"productSku": normalized},
-            {"variantSku": normalized},
-            {"productNum": normalized},
-            {"pid": normalized},
-            {"vid": normalized},
-        ]
-        if not is_cj_identifier:
-            attempts.insert(0, {"productName": normalized})
-        else:
-            attempts.append({"productName": normalized})
+        attempts = self._product_list_attempts(normalized, is_cj_identifier)
         for params in attempts:
             try:
                 result = self.client.get("/api2.0/v1/product/list", params)
@@ -83,14 +67,7 @@ class CJDropshippingProvider(SupplierProvider):
             result = self.client.get("/api2.0/v1/product/myProduct/query", {"keyword": keyword})
         except CJDropshippingError:
             return []
-        products: list[dict[str, Any]] = []
-        for row in self._rows(result.get("data") or result):
-            product = self._hydrate_product(row)
-            if product:
-                products.append({**row, **product, "_myProductRow": row})
-            else:
-                products.append(row)
-        return products
+        return self._rows(result.get("data") or result)
 
     def _products_from_variant_query(self, keyword: str) -> list[dict[str, Any]]:
         products: list[dict[str, Any]] = []
@@ -103,35 +80,38 @@ class CJDropshippingProvider(SupplierProvider):
             if not rows and isinstance(result.get("data"), dict):
                 rows = [result["data"]]
             for variant in rows:
-                product = self._hydrate_product(variant)
-                if product:
-                    variants = product.get("variants") or product.get("variantList") or product.get("productVariantList")
-                    if not variants:
-                        product["variants"] = rows
-                    products.append({**variant, **product, "_variantQueryRows": rows})
-                else:
-                    products.append(
-                        {
-                            "pid": variant.get("pid") or variant.get("productId") or keyword,
-                            "productSku": variant.get("productSku") or keyword,
-                            "productNameEn": variant.get("productNameEn") or variant.get("variantNameEn") or keyword,
-                            "variants": rows,
-                        }
-                    )
+                products.append(
+                    {
+                        **variant,
+                        "pid": variant.get("pid") or variant.get("productId") or variant.get("productSku") or keyword,
+                        "productSku": variant.get("productSku") or keyword,
+                        "productNameEn": variant.get("productNameEn") or variant.get("variantNameEn") or keyword,
+                        "variants": rows,
+                    }
+                )
         return products
 
-    def _hydrate_product(self, row: dict[str, Any]) -> dict[str, Any] | None:
-        for key in ("pid", "productId", "id", "productSku", "spu", "productCode", "productNo"):
-            value = row.get(key)
-            if not value:
-                continue
-            try:
-                product = self.get_product(str(value))
-            except CJDropshippingError:
-                continue
-            if product:
-                return product
-        return None
+    def _product_list_attempts(self, normalized: str, is_cj_identifier: bool) -> list[dict[str, str]]:
+        if is_cj_identifier:
+            return [
+                {"productSku": normalized},
+                {"pid": normalized},
+                {"variantSku": normalized},
+                {"productId": normalized},
+            ]
+        return [
+            {"productName": normalized},
+            {"productCode": normalized},
+            {"productNo": normalized},
+            {"productId": normalized},
+            {"spu": normalized},
+            {"sku": normalized},
+            {"productSku": normalized},
+            {"variantSku": normalized},
+            {"productNum": normalized},
+            {"pid": normalized},
+            {"vid": normalized},
+        ]
 
     def _rows(self, data: Any) -> list[dict[str, Any]]:
         if isinstance(data, list):
@@ -186,7 +166,18 @@ class CJDropshippingProvider(SupplierProvider):
         seen: set[str] = set()
         deduped: list[dict[str, Any]] = []
         for product in products:
-            key = str(product.get("pid") or product.get("productId") or product.get("id") or product.get("vid") or product.get("variantId") or product)
+            key = str(
+                product.get("pid")
+                or product.get("productId")
+                or product.get("id")
+                or product.get("productSku")
+                or product.get("spu")
+                or product.get("productCode")
+                or product.get("productNo")
+                or product.get("vid")
+                or product.get("variantId")
+                or product
+            )
             if key in seen:
                 continue
             seen.add(key)
