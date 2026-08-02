@@ -46,16 +46,22 @@ class SupplierService:
     def import_cj_product(self, payload: SupplierProductImportRequest) -> Product:
         if self.repo.db.scalar(select(Product).where(Product.supplier_product_id == payload.supplier_product_id, Product.deleted_at.is_(None))):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="CJ product is already imported")
+        detail = self._cj_product_detail(payload.supplier_product_id)
         supplier = self._get_or_create_cj_supplier()
-        slug = self._unique_slug(payload.name)
+        name = str(self._pick(detail, "productName", "name", "title", "productTitle") or payload.name)
+        description = self._clean_description(str(self._pick(detail, "description", "productDescription", "descriptionEn", "productDescriptionEn") or payload.description or ""))
+        short_description = self._summary(description, name)
+        images = self._images(detail, payload.image_url)
+        variants = self._detail_variants(detail, payload)
+        slug = self._unique_slug(name)
         sale_price = self._sale_price(payload.cost_price or payload.sale_price)
         product = Product(
             supplier_id=supplier.id,
             category_id=uuid.UUID(payload.category_id) if payload.category_id else None,
-            name=payload.name,
+            name=name,
             slug=slug,
-            short_description=payload.description[:500] if payload.description else None,
-            description=payload.description,
+            short_description=short_description,
+            description=description,
             sku=self._unique_sku(payload.sku.upper(), Product),
             supplier_sku=payload.supplier_sku or payload.sku,
             supplier_product_id=payload.supplier_product_id,
@@ -69,20 +75,26 @@ class SupplierService:
         )
         self.repo.db.add(product)
         self.repo.db.flush()
-        self.repo.db.add(
-            ProductVariant(
+        for index, variant_data in enumerate(variants):
+            variant_cost = variant_data.cost or payload.cost_price
+            variant_price = self._sale_price(variant_cost or payload.sale_price)
+            self.repo.db.add(
+                ProductVariant(
                 product_id=product.id,
-                sku=self._unique_sku(f"{payload.sku.upper()}-CJ", ProductVariant),
-                supplier_variant_id=payload.supplier_variant_id,
-                price=sale_price,
-                cost=payload.cost_price,
-                stock=payload.stock,
-                image_url=payload.image_url,
+                sku=self._unique_sku(f"{variant_data.sku.upper()}-CJ", ProductVariant),
+                supplier_variant_id=variant_data.supplier_variant_id,
+                price=variant_price,
+                cost=variant_cost,
+                stock=variant_data.stock,
+                image_url=variant_data.image_url or payload.image_url,
                 status="active",
             )
-        )
-        if payload.image_url:
-            self.repo.db.add(ProductImage(product_id=product.id, url=payload.image_url, alt_text=payload.name, is_primary=True))
+            )
+            if index == 0:
+                product.sale_price = variant_price
+                product.cost_price = variant_cost
+        for index, image_url in enumerate(images[:8]):
+            self.repo.db.add(ProductImage(product_id=product.id, url=image_url, alt_text=name, sort_order=index, is_primary=index == 0))
         self.repo.db.commit()
         self.repo.db.refresh(product)
         return product
@@ -299,6 +311,58 @@ class SupplierService:
             variants=variants,
             raw=item,
         )
+
+    def _cj_product_detail(self, supplier_product_id: str) -> dict[str, Any]:
+        try:
+            detail = self.provider.get_product(supplier_product_id)
+        except CJDropshippingError:
+            return {}
+        return detail if isinstance(detail, dict) else {}
+
+    def _detail_variants(self, detail: dict[str, Any], payload: SupplierProductImportRequest) -> list[SupplierProductVariantRead]:
+        variants_raw = self._pick(detail, "variants", "variantList", "variantsList", "productVariantList") or []
+        variants = [self._map_supplier_variant(variant, payload.name, payload.image_url) for variant in variants_raw if isinstance(variant, dict)]
+        variants = [variant for variant in variants if variant.supplier_variant_id]
+        if variants:
+            return variants[:20]
+        return [
+            SupplierProductVariantRead(
+                supplier_variant_id=payload.supplier_variant_id,
+                sku=payload.supplier_sku or payload.sku,
+                name=payload.name,
+                price=payload.sale_price,
+                cost=payload.cost_price,
+                stock=payload.stock,
+                image_url=payload.image_url,
+            )
+        ]
+
+    def _images(self, detail: dict[str, Any], fallback: str | None) -> list[str]:
+        values = self._pick(detail, "productImageSet", "productImages", "images", "imageList", "productImage")
+        images: list[str] = []
+        if isinstance(values, str):
+            images.extend([item.strip() for item in values.split(",") if item.strip()])
+        elif isinstance(values, list):
+            for item in values:
+                if isinstance(item, str):
+                    images.append(item)
+                elif isinstance(item, dict):
+                    image = self._pick(item, "url", "image", "imageUrl")
+                    if image:
+                        images.append(str(image))
+        if fallback:
+            images.insert(0, fallback)
+        return list(dict.fromkeys(images))
+
+    def _clean_description(self, value: str) -> str:
+        cleaned = re.sub(r"<[^>]+>", " ", value)
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()
+        return cleaned[:5000]
+
+    def _summary(self, description: str, fallback: str) -> str:
+        if description:
+            return description[:500]
+        return f"{fallback} imported from CJ with supplier variant data ready for checkout and fulfillment."
 
     def _map_supplier_variant(self, item: dict[str, Any], fallback_name: str, fallback_image: str | None) -> SupplierProductVariantRead:
         price = self._decimal(self._pick(item, "sellPrice", "price", "variantSellPrice", "listedPrice"), Decimal("0"))

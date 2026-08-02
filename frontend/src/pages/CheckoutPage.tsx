@@ -26,6 +26,30 @@ const defaultAddress: CheckoutAddressForm = {
   notes: "",
 };
 
+const identityFields: Array<[keyof CheckoutAddressForm, string]> = [
+  ["first_name", "Primeiro nome"],
+  ["last_name", "Sobrenome"],
+  ["email", "E-mail"],
+  ["phone", "Telefone"],
+];
+
+const addressFields: Array<[keyof CheckoutAddressForm, string]> = [
+  ["country", "Pais"],
+  ["postal_code", "Codigo postal"],
+  ["state", "Estado/Provincia"],
+  ["city", "Cidade"],
+  ["district", "Bairro"],
+  ["address_line1", "Endereco"],
+  ["address_line2", "Complemento"],
+];
+
+function customerMessage(message: string) {
+  if (message.includes("Enter the delivery address")) return "Informe seu endereco de entrega para verificar disponibilidade e frete.";
+  if (message.includes("CJ did not return") || message.includes("shipping quote")) return "Ainda nao temos entrega disponivel para esse endereco com os produtos do carrinho. Confira o CEP ou escolha outro produto.";
+  if (message.includes("without CJ variant IDs")) return "Este produto precisa ser atualizado antes de finalizar a compra.";
+  return message;
+}
+
 export function CheckoutPage() {
   const navigate = useNavigate();
   const { items, clear } = useCartStore();
@@ -73,7 +97,7 @@ export function CheckoutPage() {
     } catch (err) {
       setCalculation(null);
       setShippingMethodCode(undefined);
-      setError(err instanceof Error ? err.message : "Unable to calculate checkout.");
+      setError(customerMessage(err instanceof Error ? err.message : "Unable to calculate checkout."));
       return false;
     } finally {
       setLoading(false);
@@ -253,19 +277,7 @@ export function CheckoutPage() {
 
           {step <= 2 ? (
             <div className="grid gap-4 md:grid-cols-2">
-              {[
-                ["first_name", "First name"],
-                ["last_name", "Last name"],
-                ["email", "Email"],
-                ["phone", "Phone"],
-                ["country", "Country code"],
-                ["state", "State / Province"],
-                ["city", "City"],
-                ["postal_code", "Postal code"],
-                ["address_line1", "Address"],
-                ["address_line2", "Complement"],
-                ["district", "District"],
-              ].map(([name, label]) => (
+              {(step === 1 ? identityFields : addressFields).map(([name, label]) => (
                 <label key={name} className={name === "address_line1" ? "text-sm font-medium md:col-span-2" : "text-sm font-medium"}>
                   {label}
                   <input className="mt-2 h-10 w-full rounded-md border border-slate-200 px-3 text-sm outline-none focus:border-primary" {...form.register(name as keyof CheckoutAddressForm)} />
