@@ -41,8 +41,20 @@ function slugify(value: string) {
 }
 
 function suggestedPrice(costValue: string | number) {
-  const cost = Number(costValue || 0);
+  const cost = parseAmount(costValue);
   return (cost * 2.2 + 4.9).toFixed(2);
+}
+
+function parseAmount(value: string | number) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  const normalized = value.replace(/\s/g, "").replace(/[^\d,.-]/g, "").replace(",", ".");
+  const amount = Number(normalized || 0);
+  return Number.isFinite(amount) ? amount : 0;
+}
+
+function parseQuantity(value: string | number) {
+  const quantity = Number.parseInt(String(value).replace(/\D/g, ""), 10);
+  return Number.isFinite(quantity) ? quantity : 0;
 }
 
 function imageList(product: SupplierProduct) {
@@ -53,7 +65,11 @@ function apiErrorMessage(error: unknown, fallback: string) {
   if (error instanceof AxiosError) {
     const detail = error.response?.data?.detail;
     if (typeof detail === "string" && detail.trim()) return detail;
-    if (Array.isArray(detail)) return detail.map((item) => item?.msg || JSON.stringify(item)).join("; ");
+    if (Array.isArray(detail)) {
+      const messages = detail.map((item) => item?.msg || JSON.stringify(item));
+      const unique = Array.from(new Set(messages));
+      return unique.length === 1 ? unique[0] : unique.slice(0, 5).join("; ");
+    }
     if (error.message) return error.message;
   }
   if (error instanceof Error && error.message.trim()) return error.message;
@@ -100,9 +116,9 @@ export function AdminProductsPage() {
         name: form.name,
         slug: slugify(form.name),
         sku: form.sku.toUpperCase(),
-        sale_price: Number(form.sale_price),
-        cost_price: Number(form.cost_price),
-        stock: Number(form.stock),
+        sale_price: parseAmount(form.sale_price),
+        cost_price: parseAmount(form.cost_price),
+        stock: parseQuantity(form.stock),
         status: "active",
         short_description: form.short_description,
       });
@@ -202,9 +218,9 @@ export function AdminProductsPage() {
         supplier_product_id: preview.supplier_product_id,
         name: draft.name,
         sku: draft.sku || firstVariant.sku,
-        sale_price: Number(firstVariant.sale_price),
-        cost_price: Number(firstVariant.cost_price),
-        stock: Number(firstVariant.stock),
+        sale_price: parseAmount(firstVariant.sale_price),
+        cost_price: parseAmount(firstVariant.cost_price),
+        stock: parseQuantity(firstVariant.stock),
         supplier_variant_id: firstVariant.supplier_variant_id,
         supplier_sku: firstVariant.sku,
         description: draft.description,
@@ -215,9 +231,9 @@ export function AdminProductsPage() {
           sku: variant.sku,
           name: variant.name,
           options: variant.options,
-          sale_price: Number(variant.sale_price),
-          cost_price: Number(variant.cost_price),
-          stock: Number(variant.stock),
+          sale_price: parseAmount(variant.sale_price),
+          cost_price: parseAmount(variant.cost_price),
+          stock: parseQuantity(variant.stock),
           image_url: variant.image_url || draft.images[0] || null,
           selected: true,
         })),
@@ -278,8 +294,8 @@ export function AdminProductsPage() {
     try {
       const updated = await updateAdminProduct(editingId, {
         name: editForm.name,
-        sale_price: Number(editForm.sale_price),
-        cost_price: Number(editForm.cost_price),
+        sale_price: parseAmount(editForm.sale_price),
+        cost_price: parseAmount(editForm.cost_price),
         short_description: editForm.short_description,
         description: editForm.description,
       });
