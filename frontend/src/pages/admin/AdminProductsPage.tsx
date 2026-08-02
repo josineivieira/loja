@@ -132,7 +132,7 @@ export function AdminProductsPage() {
       {showCjImport ? (
         <section className="mb-5 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <form onSubmit={searchCj} className="flex flex-col gap-3 md:flex-row">
-            <input className="h-10 min-w-0 flex-1 rounded-md border border-slate-200 px-3 text-sm" placeholder="Search CJ products by keyword" value={cjQuery} onChange={(event) => setCjQuery(event.target.value)} required />
+            <input className="h-10 min-w-0 flex-1 rounded-md border border-slate-200 px-3 text-sm" placeholder="Search CJ by keyword, SKU, product ID or variant ID" value={cjQuery} onChange={(event) => setCjQuery(event.target.value)} required />
             <button className="rounded-md bg-primary px-4 text-sm font-semibold text-white" disabled={cjLoading}>{cjLoading ? "Searching..." : "Search CJ"}</button>
           </form>
           <div className="mt-5 grid gap-3">

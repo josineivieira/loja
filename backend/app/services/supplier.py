@@ -41,7 +41,11 @@ class SupplierService:
             products = self.provider.search_products(query)
         except CJDropshippingError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-        return [self._map_supplier_product(item) for item in products[:20]]
+        mapped = [self._map_supplier_product(item) for item in products[:20]]
+        needle = query.strip().upper()
+        if needle:
+            mapped.sort(key=lambda item: 0 if needle in f"{item.sku} {item.supplier_product_id} {' '.join(variant.sku for variant in item.variants)}".upper() else 1)
+        return mapped
 
     def import_cj_product(self, payload: SupplierProductImportRequest) -> Product:
         if self.repo.db.scalar(select(Product).where(Product.supplier_product_id == payload.supplier_product_id, Product.deleted_at.is_(None))):

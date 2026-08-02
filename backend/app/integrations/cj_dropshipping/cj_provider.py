@@ -16,13 +16,49 @@ class CJDropshippingProvider(SupplierProvider):
         return True
 
     def search_products(self, query: str) -> list[dict[str, Any]]:
-        result = self.client.get("/api2.0/v1/product/list", {"productName": query})
-        data = result.get("data") or {}
-        return data.get("list") or data.get("content") or []
+        normalized = query.strip()
+        results: list[dict[str, Any]] = []
+        attempts = [
+            {"productName": normalized},
+            {"sku": normalized},
+            {"productSku": normalized},
+            {"variantSku": normalized},
+            {"productNum": normalized},
+            {"pid": normalized},
+            {"vid": normalized},
+        ]
+        for params in attempts:
+            try:
+                result = self.client.get("/api2.0/v1/product/list", params)
+            except CJDropshippingError:
+                continue
+            data = result.get("data") or {}
+            rows = data.get("list") or data.get("content") or []
+            if isinstance(rows, list):
+                results.extend([row for row in rows if isinstance(row, dict)])
+        if not results and normalized.upper().startswith(("CJ", "CJAM", "CJJT", "CJST")):
+            try:
+                product = self.get_product(normalized)
+                if isinstance(product, dict):
+                    results.append(product)
+            except CJDropshippingError:
+                pass
+        return self._dedupe_products(results)
 
     def get_product(self, supplier_product_id: str) -> dict[str, Any]:
         result = self.client.get("/api2.0/v1/product/query", {"pid": supplier_product_id})
         return result.get("data") or result
+
+    def _dedupe_products(self, products: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        seen: set[str] = set()
+        deduped: list[dict[str, Any]] = []
+        for product in products:
+            key = str(product.get("pid") or product.get("productId") or product.get("id") or product.get("vid") or product.get("variantId") or product)
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(product)
+        return deduped
 
     def get_variants(self, supplier_product_id: str) -> list[dict[str, Any]]:
         product = self.get_product(supplier_product_id)
