@@ -173,6 +173,15 @@ export function AdminProductsPage() {
     }));
   }
 
+  function updateVariantOption(index: number, optionName: string, value: string) {
+    setDraft((current) => ({
+      ...current,
+      variants: current.variants.map((variant, variantIndex) =>
+        variantIndex === index ? { ...variant, options: { ...variant.options, [optionName]: value } } : variant,
+      ),
+    }));
+  }
+
   async function importAdvancedProduct() {
     if (!preview || !selectedVariants.length) {
       setError("Selecione pelo menos uma variante CJ valida para importar.");
@@ -369,7 +378,9 @@ export function AdminProductsPage() {
                           <th className="px-2 py-2">Imagem</th>
                           <th className="px-2 py-2">SKU CJ</th>
                           <th className="px-2 py-2">Opcoes CJ</th>
-                          <th className="px-2 py-2">Opcao</th>
+                          <th className="px-2 py-2">Cor</th>
+                          <th className="px-2 py-2">Tamanho</th>
+                          <th className="px-2 py-2">Nome da opcao</th>
                           <th className="px-2 py-2">Custo CJ</th>
                           <th className="px-2 py-2">Seu preco</th>
                           <th className="px-2 py-2">Estoque</th>
@@ -382,6 +393,8 @@ export function AdminProductsPage() {
                             <td className="px-2 py-2">{variant.image_url ? <img src={variant.image_url} alt="" className="h-12 w-12 rounded-md object-cover" /> : <div className="h-12 w-12 rounded-md bg-mist" />}</td>
                             <td className="px-2 py-2 text-slate-600">{variant.sku}</td>
                             <td className="px-2 py-2 text-slate-600">{Object.entries(variant.options).map(([key, value]) => `${key}: ${value}`).join(" / ") || "-"}</td>
+                            <td className="px-2 py-2"><input className="h-9 w-28 rounded-md border border-slate-200 px-2" value={variant.options.Color ?? variant.options.color ?? ""} onChange={(event) => updateVariantOption(index, "Color", event.target.value)} /></td>
+                            <td className="px-2 py-2"><input className="h-9 w-24 rounded-md border border-slate-200 px-2" value={variant.options.Size ?? variant.options.size ?? ""} onChange={(event) => updateVariantOption(index, "Size", event.target.value)} /></td>
                             <td className="px-2 py-2"><input className="h-9 w-48 rounded-md border border-slate-200 px-2" value={variant.name} onChange={(event) => updateVariant(index, { name: event.target.value })} /></td>
                             <td className="px-2 py-2"><input className="h-9 w-24 rounded-md border border-slate-200 px-2" value={variant.cost_price} onChange={(event) => updateVariant(index, { cost_price: event.target.value, sale_price: suggestedPrice(event.target.value) })} /></td>
                             <td className="px-2 py-2"><input className="h-9 w-24 rounded-md border border-slate-200 px-2 font-semibold" value={variant.sale_price} onChange={(event) => updateVariant(index, { sale_price: event.target.value })} /></td>

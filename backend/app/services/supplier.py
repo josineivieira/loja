@@ -333,8 +333,8 @@ class SupplierService:
 
     def _map_supplier_product(self, item: dict[str, Any]) -> SupplierProductRead:
         supplier_product_id = str(self._pick(item, "pid", "productId", "id", "supplierProductId", "productSku", "spu", "productCode", "productNo") or "")
-        name = self._clean_title(str(self._pick(item, "productName", "name", "title", "productTitle") or "CJ Product"))
-        image_url = self._first_image(self._pick(item, "productImage", "productImageSet", "image", "imageUrl", "productImages"))
+        name = self._clean_title(str(self._pick(item, "productName", "productNameEn", "productNameCn", "name", "nameEn", "title", "productTitle", "variantNameEn") or "CJ Product"))
+        image_url = self._first_image(self._pick(item, "productImage", "productImageSet", "image", "imageUrl", "productImages", "variantImage"))
         variants_raw = self._pick(item, "variants", "variantList", "variantsList", "productVariantList") or []
         variants = [self._map_supplier_variant(variant, name, image_url) for variant in variants_raw if isinstance(variant, dict)]
         if not variants:
@@ -351,11 +351,13 @@ class SupplierService:
                     image_url=image_url,
                 )
             ]
+        description = self._clean_description(str(self._pick(item, "description", "productDescription", "productDescriptionEn", "descriptionEn") or ""))
+        variants = self._normalize_supplier_variants(variants, f"{name} {description}")
         return SupplierProductRead(
             supplier_product_id=supplier_product_id,
             name=name,
             sku=str(self._pick(item, "productSku", "sku", "productNum") or f"CJ-{supplier_product_id}"),
-            description=self._clean_description(str(self._pick(item, "description", "productDescription") or "")),
+            description=description,
             image_url=image_url,
             images=self._images(item, image_url),
             variants=variants,
@@ -390,6 +392,7 @@ class SupplierService:
         variants_raw = self._pick(detail, "variants", "variantList", "variantsList", "productVariantList") or []
         variants = [self._map_supplier_variant(variant, payload.name, payload.image_url) for variant in variants_raw if isinstance(variant, dict)]
         variants = [variant for variant in variants if variant.supplier_variant_id]
+        variants = self._normalize_supplier_variants(variants, f"{payload.name} {payload.description or ''}")
         if variants:
             return [
                 SupplierProductVariantRead(
@@ -459,13 +462,56 @@ class SupplierService:
         return SupplierProductVariantRead(
             supplier_variant_id=str(self._pick(item, "vid", "variantId", "id", "supplierVariantId") or ""),
             sku=str(self._pick(item, "variantSku", "sku", "variantKey", "variantNameEn") or "CJ-VARIANT"),
-            name=self._pick(item, "variantName", "variantNameEn", "variantKey", "name") or fallback_name,
+            name=self._pick(item, "variantName", "variantNameEn", "variantKey", "name", "nameEn") or fallback_name,
             options=self._variant_options_from_raw(item, fallback_name),
             price=price,
             cost=self._decimal(self._pick(item, "costPrice", "variantStandard", "standard", "price"), price),
             stock=int(self._decimal(self._pick(item, "stock", "inventory", "sellableQuantity"), Decimal("999"))),
             image_url=self._first_image(self._pick(item, "variantImage", "image", "imageUrl")) or fallback_image,
         )
+
+    def _normalize_supplier_variants(self, variants: list[SupplierProductVariantRead], product_text: str) -> list[SupplierProductVariantRead]:
+        if len(variants) < 2 or not self._looks_like_footwear(product_text):
+            return variants
+        sizes = self._shoe_sizes_from_text(product_text) or ["36", "37", "38", "39", "40", "41", "42", "43"]
+        current_sizes = [variant.options.get("Size") or variant.options.get("size") for variant in variants]
+        unique_sizes = {str(size).strip().upper() for size in current_sizes if size}
+        if len(unique_sizes) > 1 and not unique_sizes.issubset({"S", "M", "L"}):
+            return variants
+
+        normalized: list[SupplierProductVariantRead] = []
+        color_positions: dict[str, int] = {}
+        for variant in variants:
+            options = dict(variant.options)
+            color = options.get("Color") or options.get("color") or self._color_key_from_image(variant.image_url) or "Default"
+            color_key = color.lower()
+            index = color_positions.get(color_key, 0)
+            color_positions[color_key] = index + 1
+            options["Color"] = self._translate_option_label("color", color)
+            options["Size"] = sizes[index % len(sizes)]
+            normalized.append(variant.model_copy(update={"options": options}))
+        return normalized
+
+    def _looks_like_footwear(self, value: str) -> bool:
+        lowered = value.lower()
+        return any(token in lowered for token in ("shoe", "shoes", "sneaker", "sandal", "slipper", "flat", "loafer", "sapato", "tenis", "sandalia", "chinelo", "鞋", "单鞋"))
+
+    def _shoe_sizes_from_text(self, value: str) -> list[str]:
+        sizes = [item for item in re.findall(r"\b(?:3[5-9]|4[0-6])\b", value) if item]
+        ordered = list(dict.fromkeys(sizes))
+        if len(ordered) >= 3:
+            return ordered
+        match = re.search(r"(3[5-9]|4[0-6])\s*[-~]\s*(3[5-9]|4[0-6])", value)
+        if match:
+            start, end = int(match.group(1)), int(match.group(2))
+            if start < end and end - start <= 15:
+                return [str(size) for size in range(start, end + 1)]
+        return []
+
+    def _color_key_from_image(self, image_url: str | None) -> str | None:
+        if not image_url:
+            return None
+        return image_url.rsplit("/", 1)[-1].split(".", 1)[0][:40] or None
 
     def _attach_variant_options(
         self,
@@ -483,6 +529,7 @@ class SupplierService:
         parsed = raw_options or self._parse_variant_options(str(raw_name), product_description, index)
         for option_name, label in parsed.items():
             normalized_option = self._normalize_option_name(option_name)
+            label = self._translate_option_label(normalized_option, str(label))
             key = (normalized_option, label.lower())
             option_value = option_cache.get(key)
             if not option_value:
@@ -524,6 +571,28 @@ class SupplierService:
             "style": "Estilo",
             "option": "Opcao",
         }.get(value, value.title())
+
+    def _translate_option_label(self, option_name: str, value: str) -> str:
+        cleaned = str(value).strip()
+        if option_name != "color":
+            return cleaned.upper() if option_name == "size" and len(cleaned) <= 4 else cleaned
+        return {
+            "white": "Branco",
+            "beige": "Bege",
+            "black": "Preto",
+            "blue": "Azul",
+            "green": "Verde",
+            "pink": "Rosa",
+            "red": "Vermelho",
+            "orange": "Laranja",
+            "yellow": "Amarelo",
+            "purple": "Roxo",
+            "gray": "Cinza",
+            "grey": "Cinza",
+            "wine": "Vinho",
+            "khaki": "Caqui",
+            "brown": "Marrom",
+        }.get(cleaned.lower(), cleaned)
 
     def _parse_variant_options(self, raw_name: str, product_description: str, index: int) -> dict[str, str]:
         value = unescape(raw_name or "")
