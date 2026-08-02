@@ -425,7 +425,7 @@ class SupplierService:
             SupplierProductVariantRead(
                 supplier_variant_id=variant.supplier_variant_id,
                 sku=variant.sku,
-                name=variant.name,
+                name=(variant.name or "")[:180] or None,
                 options=variant.options,
                 price=variant.sale_price,
                 cost=variant.cost_price,

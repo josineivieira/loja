@@ -56,6 +56,7 @@ function apiErrorMessage(error: unknown, fallback: string) {
     if (Array.isArray(detail)) return detail.map((item) => item?.msg || JSON.stringify(item)).join("; ");
     if (error.message) return error.message;
   }
+  if (error instanceof Error && error.message.trim()) return error.message;
   return fallback;
 }
 

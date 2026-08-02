@@ -71,7 +71,7 @@ class SupplierProductRead(BaseModel):
 class SupplierProductImportVariant(BaseModel):
     supplier_variant_id: str = Field(min_length=2, max_length=120)
     sku: str = Field(min_length=2, max_length=120)
-    name: str | None = Field(default=None, max_length=180)
+    name: str | None = Field(default=None, max_length=500)
     options: dict[str, str] = Field(default_factory=dict)
     sale_price: Decimal = Field(ge=0)
     cost_price: Decimal = Field(default=0, ge=0)
