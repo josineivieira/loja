@@ -168,6 +168,12 @@ class CheckoutService:
         cj_quotes = self._cj_shipping_quotes(payload, lines, currency)
         if cj_quotes:
             return cj_quotes
+        if settings.supplier_provider.lower() == "cj":
+            if not payload.address:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Enter the delivery address to calculate real CJ shipping.")
+            if not all(line.supplier_variant_id for line in lines):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This cart has products without CJ variant IDs. Import the products from CJ again before selling.")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="CJ did not return a real shipping quote for this address. Try another address or product.")
         quotes: list[ShippingQuote] = []
         for method in self.repo.list_shipping_methods(country):
             amount = Decimal("0.00") if method.free_over_amount and subtotal >= method.free_over_amount else method.amount

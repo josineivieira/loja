@@ -2,7 +2,7 @@ import { api } from "./api";
 import { demoProducts } from "../data/demoCatalog";
 import type { CheckoutCalculateRequest, CheckoutCalculation, Order, PaymentSession } from "../types/checkout";
 
-const demoFallbackEnabled = import.meta.env.VITE_ENABLE_DEMO_FALLBACK !== "false";
+const demoFallbackEnabled = import.meta.env.VITE_ENABLE_DEMO_FALLBACK === "true";
 
 function apiErrorMessage(error: unknown, fallback: string) {
   if (typeof error === "object" && error && "response" in error) {
