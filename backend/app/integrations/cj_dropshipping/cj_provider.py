@@ -20,6 +20,8 @@ class CJDropshippingProvider(SupplierProvider):
         results: list[dict[str, Any]] = []
         is_cj_identifier = normalized.upper().startswith(("CJ", "CJAM", "CJJT", "CJST", "CJNS", "CJLY", "CJQC"))
         if is_cj_identifier:
+            results.extend(self._my_products(normalized))
+            results.extend(self._products_from_variant_query(normalized))
             for identifier in self._product_identifier_candidates(normalized):
                 try:
                     product = self.get_product(identifier)
@@ -75,6 +77,71 @@ class CJDropshippingProvider(SupplierProvider):
         if last_error:
             raise last_error
         return {}
+
+    def _my_products(self, keyword: str) -> list[dict[str, Any]]:
+        try:
+            result = self.client.get("/api2.0/v1/product/myProduct/query", {"keyword": keyword})
+        except CJDropshippingError:
+            return []
+        products: list[dict[str, Any]] = []
+        for row in self._rows(result.get("data") or result):
+            product = self._hydrate_product(row)
+            if product:
+                products.append({**row, **product, "_myProductRow": row})
+            else:
+                products.append(row)
+        return products
+
+    def _products_from_variant_query(self, keyword: str) -> list[dict[str, Any]]:
+        products: list[dict[str, Any]] = []
+        for params in ({"productSku": keyword}, {"variantSku": keyword}, {"pid": keyword}):
+            try:
+                result = self.client.get("/api2.0/v1/product/variant/query", params)
+            except CJDropshippingError:
+                continue
+            rows = self._rows(result.get("data") or result)
+            if not rows and isinstance(result.get("data"), dict):
+                rows = [result["data"]]
+            for variant in rows:
+                product = self._hydrate_product(variant)
+                if product:
+                    variants = product.get("variants") or product.get("variantList") or product.get("productVariantList")
+                    if not variants:
+                        product["variants"] = rows
+                    products.append({**variant, **product, "_variantQueryRows": rows})
+                else:
+                    products.append(
+                        {
+                            "pid": variant.get("pid") or variant.get("productId") or keyword,
+                            "productSku": variant.get("productSku") or keyword,
+                            "productNameEn": variant.get("productNameEn") or variant.get("variantNameEn") or keyword,
+                            "variants": rows,
+                        }
+                    )
+        return products
+
+    def _hydrate_product(self, row: dict[str, Any]) -> dict[str, Any] | None:
+        for key in ("pid", "productId", "id", "productSku", "spu", "productCode", "productNo"):
+            value = row.get(key)
+            if not value:
+                continue
+            try:
+                product = self.get_product(str(value))
+            except CJDropshippingError:
+                continue
+            if product:
+                return product
+        return None
+
+    def _rows(self, data: Any) -> list[dict[str, Any]]:
+        if isinstance(data, list):
+            return [item for item in data if isinstance(item, dict)]
+        if not isinstance(data, dict):
+            return []
+        candidates = data.get("list") or data.get("content") or data.get("records") or data.get("rows") or data.get("data")
+        if isinstance(candidates, list):
+            return [item for item in candidates if isinstance(item, dict)]
+        return [data] if any(key in data for key in ("pid", "productId", "productSku", "variantSku", "vid")) else []
 
     def _product_identifier_candidates(self, value: str) -> list[str]:
         normalized = value.strip()
