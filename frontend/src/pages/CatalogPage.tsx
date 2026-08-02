@@ -76,24 +76,24 @@ export function CatalogPage({ categorySlug, searchQuery, title = "Catalog" }: Ca
         <div className="panel mb-8 overflow-hidden">
           <div className="grid gap-6 p-6 md:p-8 lg:grid-cols-[1.2fr_0.8fr] lg:items-end">
             <div>
-              <p className="eyebrow">Nexora catalog</p>
+              <p className="eyebrow">{language === "pt" ? "Produtos selecionados" : language === "es" ? "Productos seleccionados" : "Selected products"}</p>
               <h1 className="mt-4 text-4xl font-semibold tracking-[-0.04em] text-slate-950 md:text-5xl">
                 {title === "Catalog" ? t("catalog", language) : title}
               </h1>
               <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-600">
                 {language === "pt"
-                  ? "Um catálogo mais limpo, com filtros mais legíveis, mais contraste e uma apresentação muito mais alinhada com ecommerce profissional."
+                  ? "Encontre produtos úteis para casa, viagem, trabalho e rotina. Use os filtros para ajustar categoria, preço e disponibilidade."
                   : language === "es"
-                    ? "Un catálogo más limpio, con filtros más legibles, más contraste y una presentación mucho más alineada con ecommerce profesional."
-                    : "A cleaner catalog with stronger contrast, sharper filtering and a far more premium ecommerce presentation."}
+                    ? "Encuentra productos útiles para casa, viajes, trabajo y rutina. Usa los filtros para ajustar categoría, precio y disponibilidad."
+                    : "Find useful products for home, travel, work and everyday routines. Use filters to refine category, price and availability."}
               </p>
             </div>
 
             <div className="grid gap-3 text-sm text-slate-600 md:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
               {[
-                language === "pt" ? "Curadoria visual mais forte" : language === "es" ? "Curaduría visual más fuerte" : "Stronger visual curation",
-                language === "pt" ? "Filtros objetivos" : language === "es" ? "Filtros objetivos" : "Clear filters",
-                language === "pt" ? "Percurso mais premium" : language === "es" ? "Recorrido más premium" : "More premium journey",
+                language === "pt" ? "Compra segura" : language === "es" ? "Compra segura" : "Secure checkout",
+                language === "pt" ? "Frete por endereço" : language === "es" ? "Envío por dirección" : "Address-based delivery",
+                language === "pt" ? "Produtos com estoque" : language === "es" ? "Productos con stock" : "In-stock products",
               ].map((item) => (
                 <div key={item} className="border border-slate-200 bg-[#f8f6f1] p-4">{item}</div>
               ))}
@@ -190,18 +190,18 @@ export function CatalogPage({ categorySlug, searchQuery, title = "Catalog" }: Ca
 
                 <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
                   <button className="btn-secondary px-4 py-2.5 disabled:border-slate-200 disabled:text-slate-300" disabled={page === 1} onClick={() => setPage((value) => value - 1)}>
-                    Previous
+                    {language === "pt" ? "Anterior" : language === "es" ? "Anterior" : "Previous"}
                   </button>
-                  <span className="border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700">Page {page}</span>
+                  <span className="border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700">{language === "pt" ? "Página" : language === "es" ? "Página" : "Page"} {page}</span>
                   <button className="btn-primary px-4 py-2.5 disabled:border-slate-300 disabled:bg-slate-300" disabled={products.length < 12} onClick={() => setPage((value) => value + 1)}>
-                    Next
+                    {language === "pt" ? "Próxima" : language === "es" ? "Siguiente" : "Next"}
                     <ArrowRight className="h-4 w-4" />
                   </button>
                 </div>
 
                 <div className="mt-8 text-center text-sm text-slate-500">
                   <Link to="/checkout" className="font-semibold text-slate-700 underline underline-offset-4 transition hover:text-slate-950">
-                    {language === "pt" ? "Ver o novo checkout" : language === "es" ? "Ver el nuevo checkout" : "View the redesigned checkout"}
+                    {language === "pt" ? "Ir para o carrinho" : language === "es" ? "Ir al carrito" : "Go to cart"}
                   </Link>
                 </div>
               </>
