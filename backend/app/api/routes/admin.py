@@ -1,3 +1,10 @@
+import hashlib
+import hmac
+import json
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
 import uuid
 from typing import Annotated
 
@@ -38,10 +45,149 @@ from app.core.config import settings
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 AdminUser = Annotated[User, Depends(require_roles("admin", "manager"))]
+ALIEXPRESS_CALLBACK_URL = "https://nexora-backend-5pu6.onrender.com/api/admin/aliexpress/oauth/callback"
 
 
 def customer_to_read(user: User) -> AdminCustomerRead:
     return AdminCustomerRead.model_validate({**user.__dict__, "roles": user.role_names})
+
+
+def _read_json_response(response: object) -> dict[str, object]:
+    raw_body = response.read().decode("utf-8")
+    try:
+        parsed = json.loads(raw_body)
+    except json.JSONDecodeError:
+        return {"raw": raw_body}
+    if isinstance(parsed, dict):
+        return parsed
+    return {"raw": parsed}
+
+
+def _post_form(url: str, payload: dict[str, str]) -> dict[str, object]:
+    encoded = urllib.parse.urlencode(payload).encode("utf-8")
+    request = urllib.request.Request(
+        url,
+        data=encoded,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=20) as response:
+        return _read_json_response(response)
+
+
+def _post_aliexpress_rest(api_path: str, payload: dict[str, str]) -> dict[str, object]:
+    request_payload = {
+        "app_key": settings.aliexpress_app_key,
+        "timestamp": str(int(time.time() * 1000)),
+        "sign_method": "sha256",
+        **payload,
+    }
+    source = api_path + "".join(f"{key}{request_payload[key]}" for key in sorted(request_payload))
+    signature = hmac.new(
+        settings.aliexpress_app_secret.encode("utf-8"),
+        source.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest().upper()
+    request_payload["sign"] = signature
+    return _post_form(f"https://api-sg.aliexpress.com/rest{api_path}", request_payload)
+
+
+def _token_value(data: dict[str, object], *keys: str) -> str | None:
+    for key in keys:
+        value = data.get(key)
+        if isinstance(value, str) and value:
+            return value
+    nested = data.get("result")
+    if isinstance(nested, dict):
+        for key in keys:
+            value = nested.get(key)
+            if isinstance(value, str) and value:
+                return value
+    return None
+
+
+def _int_token_value(data: dict[str, object], *keys: str) -> int | None:
+    for key in keys:
+        value = data.get(key)
+        if value not in (None, ""):
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                pass
+    nested = data.get("result")
+    if isinstance(nested, dict):
+        for key in keys:
+            value = nested.get(key)
+            if value not in (None, ""):
+                try:
+                    return int(value)
+                except (TypeError, ValueError):
+                    pass
+    return None
+
+
+def _exchange_aliexpress_code(code: str) -> AliExpressOAuthCallbackRead:
+    attempts: list[tuple[str, dict[str, str]]] = []
+    last_error = ""
+
+    old_oauth_payload = {
+        "grant_type": "authorization_code",
+        "client_id": settings.aliexpress_app_key,
+        "client_secret": settings.aliexpress_app_secret,
+        "code": code,
+        "redirect_uri": ALIEXPRESS_CALLBACK_URL,
+    }
+    token_attempts = [
+        ("oauth.aliexpress.com/token", lambda: _post_form("https://oauth.aliexpress.com/token", old_oauth_payload)),
+        ("api-sg.aliexpress.com/oauth/token", lambda: _post_form("https://api-sg.aliexpress.com/oauth/token", old_oauth_payload)),
+        ("api-sg.aliexpress.com/rest/auth/token/create", lambda: _post_aliexpress_rest("/auth/token/create", {"code": code})),
+        (
+            "api-sg.aliexpress.com/rest/auth/token/create grant_type",
+            lambda: _post_aliexpress_rest("/auth/token/create", {"code": code, "grant_type": "authorization_code"}),
+        ),
+    ]
+
+    for source, exchange in token_attempts:
+        try:
+            data = exchange()
+        except urllib.error.HTTPError as exc:
+            try:
+                error_data = _read_json_response(exc)
+            except Exception:
+                error_data = {"status": exc.code, "reason": exc.reason}
+            attempts.append((source, {"error": str(error_data)}))
+            last_error = f"{source}: {error_data}"
+            continue
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            attempts.append((source, {"error": str(exc)}))
+            last_error = f"{source}: {exc}"
+            continue
+
+        access_token = _token_value(data, "access_token", "accessToken")
+        refresh_token = _token_value(data, "refresh_token", "refreshToken")
+        if access_token or refresh_token:
+            return AliExpressOAuthCallbackRead(
+                code=code,
+                access_token=access_token,
+                refresh_token=refresh_token,
+                expires_in=_int_token_value(data, "expires_in", "expire_time", "expires"),
+                refresh_expires_in=_int_token_value(data, "refresh_token_expires_in", "refresh_expires_in"),
+                user_id=_token_value(data, "user_id", "userId", "resource_owner"),
+                account_platform=_token_value(data, "account_platform", "accountPlatform"),
+                token_source=source,
+                raw_response=data,
+                message="AliExpress authorization completed. Copy the tokens to Render environment variables and do not share them publicly.",
+            )
+
+        attempts.append((source, {"response": json.dumps(data, ensure_ascii=True)[:500]}))
+        last_error = f"{source}: {data}"
+
+    return AliExpressOAuthCallbackRead(
+        code=code,
+        exchange_error=last_error or "AliExpress did not return tokens.",
+        raw_response={"attempts": attempts},
+        message="Authorization code received, but token exchange failed. Check ALIEXPRESS_APP_KEY, ALIEXPRESS_APP_SECRET and the AliExpress app status.",
+    )
 
 
 @router.get("/dashboard", response_model=AdminDashboardRead)
@@ -67,27 +213,30 @@ def integration_status(_: AdminUser) -> IntegrationStatusRead:
 
 @router.get("/aliexpress/oauth/url", response_model=AliExpressAuthUrlRead)
 def aliexpress_oauth_url(_: AdminUser) -> AliExpressAuthUrlRead:
-    callback_url = f"{str(settings.frontend_url).rstrip('/')}/api/admin/aliexpress/oauth/callback"
-    backend_callback_url = "https://nexora-backend-5pu6.onrender.com/api/admin/aliexpress/oauth/callback"
-    callback_url = backend_callback_url
     authorization_url = (
         "https://api-sg.aliexpress.com/oauth/authorize"
         f"?response_type=code&client_id={settings.aliexpress_app_key}"
-        f"&redirect_uri={callback_url}"
+        f"&redirect_uri={urllib.parse.quote(ALIEXPRESS_CALLBACK_URL, safe='')}"
         "&state=nexora-aliexpress"
     )
-    return AliExpressAuthUrlRead(authorization_url=authorization_url, callback_url=callback_url)
+    return AliExpressAuthUrlRead(authorization_url=authorization_url, callback_url=ALIEXPRESS_CALLBACK_URL)
 
 
 @router.get("/aliexpress/oauth/callback", response_model=AliExpressOAuthCallbackRead)
 def aliexpress_oauth_callback(code: str | None = None, state: str | None = None, error: str | None = None) -> AliExpressOAuthCallbackRead:
     if error:
         return AliExpressOAuthCallbackRead(code=code, state=state, error=error, message="AliExpress authorization returned an error.")
-    return AliExpressOAuthCallbackRead(
-        code=code,
-        state=state,
-        message="Authorization code received. Copy this code and exchange it for tokens in the next setup step.",
-    )
+    if not code:
+        return AliExpressOAuthCallbackRead(state=state, message="AliExpress callback did not include an authorization code.")
+    if not settings.aliexpress_app_key or not settings.aliexpress_app_secret:
+        return AliExpressOAuthCallbackRead(
+            code=code,
+            state=state,
+            message="Authorization code received. Configure ALIEXPRESS_APP_KEY and ALIEXPRESS_APP_SECRET on Render, redeploy, then authorize again to exchange tokens.",
+        )
+    exchanged = _exchange_aliexpress_code(code)
+    exchanged.state = state
+    return exchanged
 
 
 @router.post("/categories", response_model=CategoryRead, status_code=201)
