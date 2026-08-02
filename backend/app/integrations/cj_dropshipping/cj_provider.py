@@ -18,8 +18,20 @@ class CJDropshippingProvider(SupplierProvider):
     def search_products(self, query: str) -> list[dict[str, Any]]:
         normalized = query.strip()
         results: list[dict[str, Any]] = []
+        is_cj_identifier = normalized.upper().startswith(("CJ", "CJAM", "CJJT", "CJST", "CJNS", "CJLY", "CJQC"))
+        if is_cj_identifier:
+            for identifier in self._product_identifier_candidates(normalized):
+                try:
+                    product = self.get_product(identifier)
+                    if isinstance(product, dict) and product:
+                        results.append(product)
+                except CJDropshippingError:
+                    pass
+            exact_results = [product for product in self._dedupe_products(results) if self._product_matches_query(product, normalized)]
+            if exact_results:
+                return exact_results
+            results = []
         attempts = [
-            {"productName": normalized},
             {"sku": normalized},
             {"productSku": normalized},
             {"variantSku": normalized},
@@ -27,6 +39,8 @@ class CJDropshippingProvider(SupplierProvider):
             {"pid": normalized},
             {"vid": normalized},
         ]
+        if not is_cj_identifier:
+            attempts.insert(0, {"productName": normalized})
         for params in attempts:
             try:
                 result = self.client.get("/api2.0/v1/product/list", params)
@@ -36,15 +50,10 @@ class CJDropshippingProvider(SupplierProvider):
             rows = data.get("list") or data.get("content") or []
             if isinstance(rows, list):
                 results.extend([row for row in rows if isinstance(row, dict)])
-        if not results and normalized.upper().startswith(("CJ", "CJAM", "CJJT", "CJST")):
-            for identifier in self._product_identifier_candidates(normalized):
-                try:
-                    product = self.get_product(identifier)
-                    if isinstance(product, dict) and product:
-                        results.append(product)
-                except CJDropshippingError:
-                    pass
-        return self._dedupe_products(results)
+        deduped = self._dedupe_products(results)
+        if is_cj_identifier:
+            return [product for product in deduped if self._product_matches_query(product, normalized)]
+        return deduped
 
     def get_product(self, supplier_product_id: str) -> dict[str, Any]:
         last_error: CJDropshippingError | None = None
@@ -72,6 +81,24 @@ class CJDropshippingProvider(SupplierProvider):
         if len(normalized) > 2:
             candidates.append(normalized[:-2])
         return list(dict.fromkeys(candidates))
+
+    def _product_matches_query(self, product: dict[str, Any], query: str) -> bool:
+        needle = query.strip().upper()
+        values: list[str] = []
+        for key in ("pid", "productId", "id", "productSku", "sku", "productNum", "vid", "variantId"):
+            value = product.get(key)
+            if value:
+                values.append(str(value).upper())
+        variants = product.get("variants") or product.get("variantList") or product.get("variantsList") or product.get("productVariantList") or []
+        if isinstance(variants, list):
+            for variant in variants:
+                if not isinstance(variant, dict):
+                    continue
+                for key in ("vid", "variantId", "id", "variantSku", "sku", "variantKey", "variantName", "variantNameEn"):
+                    value = variant.get(key)
+                    if value:
+                        values.append(str(value).upper())
+        return any(needle == value or needle in value for value in values)
 
     def _dedupe_products(self, products: list[dict[str, Any]]) -> list[dict[str, Any]]:
         seen: set[str] = set()

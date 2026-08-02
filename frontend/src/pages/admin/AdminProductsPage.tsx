@@ -103,7 +103,9 @@ export function AdminProductsPage() {
     setCjLoading(true);
     setPreview(null);
     try {
-      setCjProducts(await searchCjProducts(cjQuery));
+      const results = await searchCjProducts(cjQuery);
+      setCjProducts(results);
+      if (!results.length) setError("Nenhum produto CJ bateu exatamente com essa busca. Se for SKU de variante, copie tambem o ID do produto/pid na CJ ou autorize a loja API na CJ.");
     } catch {
       setError("Nao foi possivel buscar na CJ. Confira CJ_API_KEY e SUPPLIER_PROVIDER=cj no Render backend.");
     } finally {
