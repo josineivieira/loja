@@ -1,4 +1,4 @@
-import { ArrowRight, ShieldCheck, Truck, Zap } from "lucide-react";
+import { ArrowRight, ShieldCheck, Sparkles, Truck } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 
@@ -7,41 +7,58 @@ import { Seo } from "../components/Seo";
 import { listCategories, listProducts } from "../services/catalogService";
 import { usePreferencesStore } from "../stores/preferencesStore";
 import type { Category, Product } from "../types/catalog";
+import { formatMoney } from "../utils/currency";
 import { t } from "../utils/i18n";
+import { productDisplayDescription, productDisplayName } from "../utils/productPresentation";
 
-const spotlightCopy = {
+const homeCopy = {
   en: {
-    title: "Storefront designed to feel premium from the first scroll to the last click.",
-    text: "A sharper ecommerce direction with cleaner hierarchy, more trust signals and a more deliberate product discovery experience.",
-    heroAction: "Explore catalog",
-    secondaryAction: "See how checkout flows",
-    editLine: "A more refined shopping experience",
-    metrics: ["high-trust checkout", "clear product discovery", "supplier-ready structure"],
-    selection: "Curated storefront sections",
-    collectionText: "Present collections with the discipline and visual confidence of large retail brands.",
-    journal: "Designed for brands that want more perceived value.",
+    title: "Smart finds for home, travel and everyday comfort.",
+    text: "Discover useful products with secure checkout, international delivery and clear prices before you buy.",
+    eyebrow: "Selected products for your routine",
+    catalog: "View products",
+    newArrivals: "New arrivals",
+    featured: "Featured today",
+    from: "From",
+    shopNow: "Shop now",
+    benefits: ["Secure payment", "Delivery calculated by address", "Tracking when available"],
+    departments: "Popular departments",
+    departmentsText: "Browse practical products for smart homes, trips, workspaces and daily use.",
+    note: "New products are added as supplier availability is confirmed.",
+    selection: "Nexora selection",
+    latest: "Latest arrivals",
   },
   pt: {
-    title: "Uma vitrine desenhada para parecer premium do primeiro scroll ao último clique.",
-    text: "Direção visual mais sofisticada, hierarquia mais limpa, mais sinais de confiança e uma navegação de produto muito mais madura.",
-    heroAction: "Explorar catálogo",
-    secondaryAction: "Ver fluxo do checkout",
-    editLine: "Uma experiência de compra mais refinada",
-    metrics: ["checkout com mais confiança", "descoberta de produtos mais clara", "estrutura pronta para fornecedor"],
-    selection: "Seções pensadas para vender",
-    collectionText: "Apresente coleções com a disciplina visual e a presença das grandes marcas do varejo.",
-    journal: "Desenhado para lojas que querem aumentar valor percebido.",
+    title: "Achados inteligentes para casa, viagem e rotina.",
+    text: "Produtos úteis com compra segura, entrega internacional e preço claro antes de finalizar o pedido.",
+    eyebrow: "Selecionados para facilitar seu dia",
+    catalog: "Ver produtos",
+    newArrivals: "Novidades",
+    featured: "Destaque de hoje",
+    from: "A partir de",
+    shopNow: "Comprar agora",
+    benefits: ["Pagamento seguro", "Frete calculado pelo endereço", "Rastreamento quando disponível"],
+    departments: "Departamentos populares",
+    departmentsText: "Encontre itens práticos para casa inteligente, viagens, trabalho e uso diário.",
+    note: "Novos produtos entram na loja conforme disponibilidade confirmada no fornecedor.",
+    selection: "Seleção Nexora",
+    latest: "Novidades",
   },
   es: {
-    title: "Una vitrina pensada para sentirse premium desde el primer scroll hasta el último clic.",
-    text: "Dirección visual más sofisticada, jerarquía más limpia, más señales de confianza y una experiencia de descubrimiento mucho más madura.",
-    heroAction: "Explorar catálogo",
-    secondaryAction: "Ver flujo del checkout",
-    editLine: "Una experiencia de compra más refinada",
-    metrics: ["checkout de alta confianza", "descubrimiento más claro", "estructura lista para proveedor"],
-    selection: "Secciones pensadas para vender",
-    collectionText: "Presenta colecciones con la disciplina visual y la presencia de las grandes marcas del retail.",
-    journal: "Diseñado para tiendas que quieren elevar el valor percibido.",
+    title: "Hallazgos inteligentes para casa, viajes y rutina.",
+    text: "Productos útiles con compra segura, entrega internacional y precio claro antes de finalizar.",
+    eyebrow: "Seleccionados para tu día a día",
+    catalog: "Ver productos",
+    newArrivals: "Novedades",
+    featured: "Destacado de hoy",
+    from: "Desde",
+    shopNow: "Comprar ahora",
+    benefits: ["Pago seguro", "Envío calculado por dirección", "Rastreo cuando esté disponible"],
+    departments: "Departamentos populares",
+    departmentsText: "Encuentra productos prácticos para casa inteligente, viajes, trabajo y uso diario.",
+    note: "Nuevos productos se agregan según disponibilidad confirmada por el proveedor.",
+    selection: "Selección Nexora",
+    latest: "Novedades",
   },
 } as const;
 
@@ -50,7 +67,8 @@ export function HomePage() {
   const [bestSellers, setBestSellers] = useState<Product[]>([]);
   const [newArrivals, setNewArrivals] = useState<Product[]>([]);
   const language = usePreferencesStore((state) => state.language);
-  const copy = spotlightCopy[language];
+  const displayCurrency = usePreferencesStore((state) => state.currency);
+  const copy = homeCopy[language];
 
   useEffect(() => {
     Promise.all([
@@ -66,101 +84,114 @@ export function HomePage() {
 
   const heroProduct = useMemo(() => bestSellers[0] ?? newArrivals[0], [bestSellers, newArrivals]);
   const heroImage = heroProduct?.images.find((image) => image.is_primary)?.url ?? heroProduct?.images[0]?.url;
+  const heroName = heroProduct ? productDisplayName(heroProduct, language) : "Nexora";
+  const heroDescription = heroProduct ? productDisplayDescription(heroProduct, language) : copy.text;
 
   return (
     <div>
       <Seo
-        title="Nexora | Premium commerce storefront"
-        description="Premium ecommerce storefront with secure checkout, stronger product presentation and a more polished purchasing journey."
+        title="Nexora | Loja online de produtos úteis"
+        description="Produtos úteis para casa, viagem e rotina com checkout seguro e entrega internacional calculada por endereço."
         jsonLd={{ "@context": "https://schema.org", "@type": "Organization", name: "Nexora", url: window.location.origin }}
       />
 
       <section className="section-space pb-6">
-        <div className="shell grid gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-stretch">
-          <div className="panel surface-grid flex min-h-[620px] flex-col justify-between overflow-hidden p-8 md:p-12">
+        <div className="shell grid gap-8 lg:grid-cols-[0.95fr_1.05fr] lg:items-stretch">
+          <div className="flex min-h-[560px] flex-col justify-between bg-white p-7 shadow-[0_16px_50px_rgba(15,23,42,0.08)] md:p-10">
             <div>
-              <p className="eyebrow">{copy.editLine}</p>
-              <h1 className="mt-5 max-w-3xl text-4xl font-semibold tracking-[-0.05em] text-slate-950 md:text-6xl">
-                {copy.title}
-              </h1>
+              <p className="eyebrow">{copy.eyebrow}</p>
+              <h1 className="mt-5 max-w-2xl text-4xl font-semibold tracking-[-0.04em] text-slate-950 md:text-6xl">{copy.title}</h1>
               <p className="mt-6 max-w-xl text-base leading-8 text-slate-600 md:text-lg">{copy.text}</p>
             </div>
 
             <div className="mt-10 space-y-8">
-              <div className="grid gap-4 sm:grid-cols-3">
-                {copy.metrics.map((metric) => (
-                  <div key={metric} className="border border-slate-300 bg-white/80 p-4">
-                    <p className="text-sm font-medium leading-6 text-slate-700">{metric}</p>
+              <div className="grid gap-3 sm:grid-cols-3">
+                {copy.benefits.map((benefit) => (
+                  <div key={benefit} className="border border-slate-200 bg-[#faf8f4] p-4">
+                    <p className="text-sm font-medium leading-6 text-slate-700">{benefit}</p>
                   </div>
                 ))}
               </div>
 
               <div className="flex flex-wrap gap-3">
                 <Link to="/catalog" className="btn-primary">
-                  {t("shopNow", language) === "shopNow" ? copy.heroAction : t("shopNow", language)}
+                  {copy.catalog}
                   <ArrowRight className="h-4 w-4" />
                 </Link>
-                <Link to="/checkout" className="btn-secondary">
-                  {copy.secondaryAction}
+                <Link to="/catalog?is_new=true" className="btn-secondary">
+                  {copy.newArrivals}
                 </Link>
               </div>
             </div>
           </div>
 
           <div className="grid gap-6">
-            <div className="panel overflow-hidden bg-[#111827] p-6 text-white md:p-8">
-              <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-5">
-                <div>
-                  <p className="text-[11px] uppercase tracking-[0.26em] text-slate-300">Hero product</p>
-                  <h2 className="mt-3 text-2xl font-semibold tracking-[-0.03em]">
-                    {heroProduct?.name ?? "Nexora Collection"}
-                  </h2>
-                </div>
-                <span className="badge-subtle border-white/20 bg-white/10 text-white">Premium edit</span>
-              </div>
+            <div className="overflow-hidden bg-[#111827] text-white shadow-[0_16px_50px_rgba(15,23,42,0.18)]">
+              <div className="grid min-h-[560px] md:grid-cols-[1fr_0.95fr]">
+                <div className="flex flex-col justify-between p-7 md:p-9">
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.26em] text-blue-100">{copy.featured}</p>
+                    <h2 className="mt-4 text-3xl font-semibold tracking-[-0.03em] md:text-4xl">{heroName}</h2>
+                    <p className="mt-5 text-sm leading-7 text-slate-300">{heroDescription}</p>
+                  </div>
 
-              <div className="grid gap-6 pt-6 md:grid-cols-[1fr_220px] md:items-center">
-                <div>
-                  <p className="text-sm leading-7 text-slate-300">
-                    {heroProduct?.description ?? t("heroCopy", language)}
-                  </p>
-                  <div className="mt-6 grid gap-3 sm:grid-cols-3 md:grid-cols-1 xl:grid-cols-3">
-                    {[
-                      { icon: ShieldCheck, title: t("securePayments", language), copy: t("stripeCheckout", language) },
-                      { icon: Truck, title: t("internationalShipping", language), copy: t("calculatedAtCheckout", language) },
-                      { icon: Zap, title: t("supplierReady", language), copy: t("cjWorkflow", language) },
-                    ].map((item) => {
-                      const Icon = item.icon;
-                      return (
-                        <div key={item.title} className="border border-white/10 bg-white/5 p-4">
-                          <Icon className="h-5 w-5 text-blue-200" />
-                          <p className="mt-3 text-sm font-semibold">{item.title}</p>
-                          <p className="mt-2 text-xs leading-6 text-slate-300">{item.copy}</p>
-                        </div>
-                      );
-                    })}
+                  <div className="mt-8">
+                    {heroProduct ? (
+                      <p className="text-sm text-slate-300">
+                        {copy.from} <span className="text-2xl font-semibold text-white">{formatMoney(Number(heroProduct.sale_price), heroProduct.currency, displayCurrency)}</span>
+                      </p>
+                    ) : null}
+                    <div className="mt-6 flex flex-wrap gap-3">
+                      <Link to={heroProduct ? `/product/${heroProduct.slug}` : "/catalog"} className="btn-primary border-white bg-white text-slate-950 hover:bg-slate-100">
+                        {copy.shopNow}
+                        <ArrowRight className="h-4 w-4" />
+                      </Link>
+                      <Link to="/catalog" className="inline-flex items-center justify-center border border-white/20 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10">
+                        {copy.catalog}
+                      </Link>
+                    </div>
                   </div>
                 </div>
 
-                <div className="border border-white/10 bg-white">
+                <div className="bg-white p-5">
                   {heroImage ? (
-                    <img className="aspect-[4/5] h-full w-full object-cover" src={heroImage} alt={heroProduct?.name ?? "Nexora"} />
+                    <img className="h-full min-h-[420px] w-full object-cover" src={heroImage} alt={heroName} />
                   ) : (
-                    <div className="surface-grid aspect-[4/5] bg-[#f6f3ee]" />
+                    <div className="surface-grid h-full min-h-[420px] bg-[#f6f3ee]" />
                   )}
                 </div>
               </div>
             </div>
 
-            <div className="grid gap-6 md:grid-cols-2">
-              <div className="panel-muted p-6 md:p-7">
-                <p className="eyebrow">{copy.selection}</p>
-                <p className="mt-4 text-xl font-semibold tracking-[-0.03em] text-slate-950">{copy.collectionText}</p>
-              </div>
-              <div className="panel p-6 md:p-7">
-                <p className="eyebrow">Nexora note</p>
-                <p className="mt-4 text-xl font-semibold tracking-[-0.03em] text-slate-950">{copy.journal}</p>
-              </div>
+            <div className="grid gap-4 md:grid-cols-3">
+              {[
+                { icon: ShieldCheck, title: copy.benefits[0] },
+                { icon: Truck, title: copy.benefits[1] },
+                { icon: Sparkles, title: copy.benefits[2] },
+              ].map((item) => {
+                const Icon = item.icon;
+                return (
+                  <div key={item.title} className="border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+                    <Icon className="h-5 w-5 text-primary" />
+                    <p className="mt-3 text-sm font-semibold leading-6 text-slate-900">{item.title}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="section-space pt-4">
+        <div className="shell">
+          <div className="grid gap-5 md:grid-cols-2">
+            <div className="panel-muted p-6 md:p-7">
+              <p className="eyebrow">{copy.departments}</p>
+              <p className="mt-4 text-xl font-semibold tracking-[-0.03em] text-slate-950">{copy.departmentsText}</p>
+            </div>
+            <div className="panel p-6 md:p-7">
+              <p className="eyebrow">Nexora</p>
+              <p className="mt-4 text-xl font-semibold tracking-[-0.03em] text-slate-950">{copy.note}</p>
             </div>
           </div>
         </div>
@@ -199,7 +230,7 @@ export function HomePage() {
           <div className="shell">
             <div className="mb-8 flex items-end justify-between gap-5">
               <div>
-                <p className="kicker-line">Nexora selection</p>
+                <p className="kicker-line">{copy.selection}</p>
                 <h2 className="mt-4 headline-md">{t("bestSellers", language)}</h2>
               </div>
               <Link to="/catalog?sort=bestsellers" className="text-sm font-semibold text-slate-700 transition hover:text-slate-950">
@@ -220,7 +251,7 @@ export function HomePage() {
           <div className="shell">
             <div className="mb-8 flex items-end justify-between gap-5">
               <div>
-                <p className="kicker-line">Latest arrivals</p>
+                <p className="kicker-line">{copy.latest}</p>
                 <h2 className="mt-4 headline-md">{t("newArrivals", language)}</h2>
               </div>
               <Link to="/catalog?is_new=true" className="text-sm font-semibold text-slate-700 transition hover:text-slate-950">
