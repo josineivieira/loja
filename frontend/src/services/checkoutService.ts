@@ -82,7 +82,10 @@ export async function estimateShipping(payload: {
     const { data } = await api.post<ShippingQuote[]>("/checkout/shipping-estimate", payload);
     return data;
   } catch (error) {
-    throw new Error(apiErrorMessage(error, "Delivery is not available for this destination."));
+    const message = apiErrorMessage(error, "Delivery is not available for this destination.");
+    if (message.includes("Delivery is not available")) throw new Error("Ainda nao temos entrega disponivel para esse CEP com essa variacao.");
+    if (message.includes("CJ shipping error")) throw new Error(message.replace("CJ shipping error:", "CJ recusou o frete:"));
+    throw new Error(message);
   }
 }
 

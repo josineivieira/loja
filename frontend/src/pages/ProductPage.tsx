@@ -29,6 +29,7 @@ export function ProductPage() {
   const [deliveryForm, setDeliveryForm] = useState({ country: "BR", postal_code: "", state: "", city: "" });
   const [deliveryQuotes, setDeliveryQuotes] = useState<ShippingQuote[]>([]);
   const [deliveryStatus, setDeliveryStatus] = useState<string | null>(null);
+  const [deliveryVariantIds, setDeliveryVariantIds] = useState<string[]>([]);
   const [checkingDelivery, setCheckingDelivery] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -101,6 +102,7 @@ export function ProductPage() {
     setCheckingDelivery(true);
     setDeliveryStatus(null);
     setDeliveryQuotes([]);
+    setDeliveryVariantIds([]);
     try {
       const quotes = await estimateShipping({
         variant_id: selectedVariant.id,
@@ -112,9 +114,34 @@ export function ProductPage() {
         currency: product.currency,
       });
       setDeliveryQuotes(quotes);
+      setDeliveryVariantIds([selectedVariant.id]);
       setDeliveryStatus(quotes.length ? "Entrega disponivel para este destino." : "Ainda nao temos entrega disponivel para este destino.");
-    } catch {
-      setDeliveryStatus("Ainda nao temos entrega disponivel para este destino.");
+    } catch (error) {
+      const available = [];
+      for (const variant of product.variants.filter((item) => item.id !== selectedVariant.id)) {
+        try {
+          const quotes = await estimateShipping({
+            variant_id: variant.id,
+            quantity,
+            country: deliveryForm.country,
+            state: deliveryForm.state,
+            city: deliveryForm.city,
+            postal_code: deliveryForm.postal_code,
+            currency: product.currency,
+          });
+          if (quotes.length) available.push({ variant, quotes });
+        } catch {
+          // Some supplier variants can be unavailable for the destination while others are valid.
+        }
+      }
+      if (available.length) {
+        setSelectedVariant(available[0].variant);
+        setDeliveryQuotes(available[0].quotes);
+        setDeliveryVariantIds(available.map((item) => item.variant.id));
+        setDeliveryStatus("A variacao selecionada nao entrega nesse CEP. Selecionamos uma variacao disponivel para este destino.");
+      } else {
+        setDeliveryStatus(error instanceof Error ? error.message : "Ainda nao temos entrega disponivel para este destino.");
+      }
     } finally {
       setCheckingDelivery(false);
     }
@@ -171,6 +198,7 @@ export function ProductPage() {
                 <button key={variant.id} className={`rounded-md border p-3 text-left text-sm ${selectedVariant?.id === variant.id ? "border-primary bg-blue-50" : "border-slate-200"}`} onClick={() => setSelectedVariant(variant)}>
                   <span className="block font-semibold">{variant.sku}</span>
                   <span className="mt-1 block text-slate-600">{variant.stock > 0 ? `${variant.stock} in stock` : "Out of stock"}</span>
+                  {deliveryVariantIds.includes(variant.id) ? <span className="mt-1 block text-xs font-semibold text-emerald-700">Entrega nesse CEP</span> : null}
                 </button>
               ))}
             </div>
