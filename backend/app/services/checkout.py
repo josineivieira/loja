@@ -148,6 +148,9 @@ class CheckoutService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
         return order
 
+    def list_customer_orders(self, customer_id: str) -> list[Order]:
+        return self.repo.list_orders_for_customer(customer_id)
+
     def _calculate_discount(self, coupon_code: str | None, subtotal: Decimal) -> Decimal:
         if not coupon_code:
             return Decimal("0.00")

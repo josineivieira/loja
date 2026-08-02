@@ -2,11 +2,11 @@ import { useParams } from "react-router-dom";
 
 const content: Record<string, { intro: string; sections: { title: string; body: string }[] }> = {
   "About us": {
-    intro: "Nexora is an international smart-gadget store built for curated products, secure checkout and supplier-ready fulfillment.",
+    intro: "Nexora is an international smart-gadget store focused on curated products, secure checkout and supplier-connected fulfillment.",
     sections: [
-      { title: "What we sell", body: "Connected home devices, travel tech and workspace accessories selected for practical daily use." },
-      { title: "How orders work", body: "Every checkout is recalculated by the backend for price, stock, shipping and discounts before an order is created." },
-      { title: "Fulfillment", body: "Supplier data is attached to products and orders so the operations team can place and track supplier purchases." },
+      { title: "Product selection", body: "Products are imported from supplier catalogs and edited by Nexora before publication, including price, title and description." },
+      { title: "Real checkout", body: "Before payment, the backend recalculates product prices, stock, discounts and supplier shipping for the delivery address." },
+      { title: "Fulfillment", body: "Paid orders are prepared for CJ fulfillment and can be synchronized for supplier status and tracking updates." },
     ],
   },
   Contact: {
@@ -20,9 +20,9 @@ const content: Record<string, { intro: string; sections: { title: string; body: 
   FAQ: {
     intro: "Quick answers for common Nexora shopping questions.",
     sections: [
-      { title: "Do you ship internationally?", body: "Yes. Shipping options are calculated during checkout based on the selected delivery method." },
-      { title: "How do payments work?", body: "Orders can be paid through Stripe Checkout when live Stripe credentials are configured in production." },
-      { title: "How do I track an order?", body: "Open My orders or Track order and enter the order number shown after checkout." },
+      { title: "Do you ship internationally?", body: "Shipping availability and delivery estimates are checked at checkout using the delivery address. If the supplier cannot quote the route, checkout is blocked before payment." },
+      { title: "How do payments work?", body: "Card payments are processed through Stripe Checkout. Nexora stores payment status and provider references, not card details." },
+      { title: "How do I track an order?", body: "Open My orders or Track order and enter the order number. Tracking appears after the supplier provides a tracking number." },
     ],
   },
   "Password recovery": {
@@ -49,19 +49,19 @@ const content: Record<string, { intro: string; sections: { title: string; body: 
     ],
   },
   "Shipping policy": {
-    intro: "Shipping methods and delivery estimates are displayed during checkout before the order is placed.",
+    intro: "Shipping availability, price and estimated delivery are calculated during checkout using the customer's destination.",
     sections: [
-      { title: "Delivery estimates", body: "Standard, express and free shipping options may be available depending on cart and destination." },
-      { title: "Tracking", body: "Tracking events are shown when the fulfillment team adds carrier and tracking details." },
-      { title: "International orders", body: "Customs, taxes or import procedures may vary by destination country." },
+      { title: "Delivery estimates", body: "The delivery range shown at checkout comes from the selected supplier route when available." },
+      { title: "No fake shipping", body: "If the supplier cannot return a valid freight quote for the address, the order cannot proceed to payment." },
+      { title: "International orders", body: "Import procedures, customs inspections or local carrier delays may vary by destination country." },
     ],
   },
   "Returns and refunds": {
     intro: "Return and refund requests are reviewed based on order status, product condition and payment confirmation.",
     sections: [
-      { title: "Before shipment", body: "Contact support quickly if you need to cancel or correct an order before fulfillment." },
-      { title: "After delivery", body: "Include order number, photos and a clear description of the issue." },
-      { title: "Refunds", body: "Approved refunds are processed through the original payment provider when available." },
+      { title: "Before fulfillment", body: "Contact support quickly if the address or item needs correction before the supplier receives the order." },
+      { title: "After delivery", body: "Include order number, photos and a clear description of the issue so support can review the request." },
+      { title: "Refunds", body: "Approved refunds are processed through the original payment provider when available and may depend on fulfillment status." },
     ],
   },
   "Cookie policy": {

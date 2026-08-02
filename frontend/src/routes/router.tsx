@@ -27,9 +27,12 @@ import { AdminIntegrationsPage } from "../pages/admin/AdminIntegrationsPage";
 import { AdminOrdersPage } from "../pages/admin/AdminOrdersPage";
 import { AdminNotificationsPage } from "../pages/admin/AdminNotificationsPage";
 import { AdminPlaceholderPage } from "../pages/admin/AdminPlaceholderPage";
+import { AdminPaymentsPage } from "../pages/admin/AdminPaymentsPage";
 import { AdminProductsPage } from "../pages/admin/AdminProductsPage";
 import { AdminReviewsPage } from "../pages/admin/AdminReviewsPage";
+import { AdminSettingsPage } from "../pages/admin/AdminSettingsPage";
 import { AdminShippingPage } from "../pages/admin/AdminShippingPage";
+import { AdminLogsPage } from "../pages/admin/AdminLogsPage";
 
 export const router = createBrowserRouter([
   {
@@ -48,11 +51,11 @@ export const router = createBrowserRouter([
       { path: "banners", element: <AdminPlaceholderPage title="Banners" /> },
       { path: "pages", element: <AdminPlaceholderPage title="Pages" /> },
       { path: "shipping", element: <AdminShippingPage /> },
-      { path: "payments", element: <AdminPlaceholderPage title="Payments" /> },
+      { path: "payments", element: <AdminPaymentsPage /> },
       { path: "integrations", element: <AdminIntegrationsPage /> },
-      { path: "settings", element: <AdminPlaceholderPage title="Settings" /> },
+      { path: "settings", element: <AdminSettingsPage /> },
       { path: "users", element: <AdminPlaceholderPage title="Administrative users" /> },
-      { path: "logs", element: <AdminPlaceholderPage title="Logs" /> },
+      { path: "logs", element: <AdminLogsPage /> },
       { path: "notifications", element: <AdminNotificationsPage /> },
     ],
   },

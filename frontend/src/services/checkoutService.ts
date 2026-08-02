@@ -119,3 +119,8 @@ export async function getOrder(orderNumber: string) {
   const { data } = await api.get<Order>(`/orders/${orderNumber}`);
   return data;
 }
+
+export async function listMyOrders() {
+  const { data } = await api.get<Order[]>("/orders/me/list");
+  return data;
+}

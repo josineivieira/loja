@@ -35,9 +35,19 @@ class CheckoutRepository:
     def get_order_by_number(self, order_number: str) -> Order | None:
         return self.db.scalar(select(Order).options(selectinload(Order.items)).where(Order.order_number == order_number))
 
+    def list_orders_for_customer(self, customer_id: uuid.UUID) -> list[Order]:
+        return list(
+            self.db.scalars(
+                select(Order)
+                .options(selectinload(Order.items))
+                .where(Order.customer_id == customer_id)
+                .order_by(Order.created_at.desc())
+                .limit(50)
+            )
+        )
+
     def create_order(self, order: Order) -> Order:
         self.db.add(order)
         self.db.commit()
         self.db.refresh(order)
         return self.get_order_by_number(order.order_number) or order
-

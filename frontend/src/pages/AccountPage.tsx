@@ -2,11 +2,14 @@ import { Heart, LogOut, PackageSearch, ShoppingBag, UserRound } from "lucide-rea
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
+import { listMyOrders } from "../services/checkoutService";
 import { getCurrentUser } from "../services/authService";
 import { useAuthStore } from "../stores/authStore";
 import { useCartStore } from "../stores/cartStore";
 import { useFavoritesStore } from "../stores/favoritesStore";
 import type { User } from "../types/auth";
+import type { Order } from "../types/checkout";
+import { formatMoney } from "../utils/currency";
 
 export function AccountPage() {
   const navigate = useNavigate();
@@ -14,11 +17,13 @@ export function AccountPage() {
   const cartItems = useCartStore((state) => state.items);
   const favorites = useFavoritesStore((state) => state.items);
   const [user, setUser] = useState<User | null>(null);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [orderNumber, setOrderNumber] = useState("");
 
   useEffect(() => {
     if (!accessToken) return;
     getCurrentUser().then(setUser).catch(() => logout());
+    listMyOrders().then(setOrders).catch(() => setOrders([]));
   }, [accessToken, logout]);
 
   if (!accessToken) {
@@ -66,6 +71,26 @@ export function AccountPage() {
           <p className="mt-1 text-sm text-slate-600">{user?.is_email_verified ? "Email verificado." : "Email ainda nao verificado."}</p>
         </div>
       </div>
+
+      <section className="mt-8 rounded-lg border border-slate-200 p-5 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold">Recent orders</h2>
+          <Link to="/orders" className="text-sm font-semibold text-primary">View all</Link>
+        </div>
+        {orders.length === 0 ? (
+          <p className="mt-4 text-sm text-slate-600">No orders linked to this account yet. Future logged-in checkouts will appear here automatically.</p>
+        ) : (
+          <div className="mt-4 divide-y divide-slate-100">
+            {orders.slice(0, 5).map((order) => (
+              <Link key={order.id} to={`/orders/${order.order_number}`} className="grid gap-2 py-3 text-sm hover:bg-mist md:grid-cols-[1fr_auto_auto]">
+                <span className="font-semibold">{order.order_number}</span>
+                <span className="text-slate-600">{order.payment_status} / {order.supplier_status}</span>
+                <span>{formatMoney(Number(order.total_amount), order.currency)}</span>
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
 
       <form
         className="mt-8 rounded-lg border border-slate-200 p-5 shadow-sm"
