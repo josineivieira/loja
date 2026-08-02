@@ -13,23 +13,37 @@ class AliExpressProvider:
         query = query.strip()
         if not query:
             return []
-        if query.isdigit() or query.upper().startswith(("1005", "3256")):
+        product_id = self._extract_product_id(query)
+        if product_id:
             try:
-                return [self.get_product(query)]
+                return [self.get_product(product_id)]
             except AliExpressError:
                 pass
         responses: list[dict[str, Any]] = []
-        methods = (
-            ("aliexpress.ds.product.search", {"key_word": query, "target_language": "pt_BR", "target_currency": "BRL", "ship_to_country": "BR"}),
-            ("aliexpress.ds.feedname.get", {"target_language": "pt_BR"}),
-        )
-        for method, payload in methods:
+        errors: list[str] = []
+        for keyword in self._query_keywords(query):
             try:
-                data = self.client.ds_method(method, payload)
-            except AliExpressError:
-                continue
-            responses.extend(self._product_rows(data))
-        return self._dedupe(responses)
+                data = self.client.top_method(
+                    "aliexpress.ds.recommend.feed.get",
+                    {
+                        "target_language": "pt_BR",
+                        "target_currency": "BRL",
+                        "country": "BR",
+                        "feed_name": "DS bestseller",
+                        "page_no": 1,
+                        "page_size": 50,
+                    },
+                    require_session=False,
+                )
+                responses.extend(self._filter_products(self._product_rows(data), keyword))
+            except AliExpressError as exc:
+                errors.append(str(exc))
+        deduped = self._dedupe(responses)
+        if deduped:
+            return deduped
+        if errors:
+            raise AliExpressError(errors[-1])
+        return []
 
     def get_product(self, product_id: str) -> dict[str, Any]:
         payload = {
@@ -41,7 +55,7 @@ class AliExpressProvider:
         errors: list[str] = []
         for method in ("aliexpress.ds.product.get", "aliexpress.ds.product.simplequery"):
             try:
-                data = self.client.ds_method(method, payload)
+                data = self.client.top_method(method, payload, require_session=False)
             except AliExpressError as exc:
                 errors.append(str(exc))
                 continue
@@ -65,7 +79,7 @@ class AliExpressProvider:
         errors: list[str] = []
         for method in ("aliexpress.ds.freight.query", "aliexpress.logistics.buyer.freight.get"):
             try:
-                data = self.client.ds_method(method, request_payload)
+                data = self.client.top_method(method, request_payload)
             except AliExpressError as exc:
                 errors.append(str(exc))
                 continue
@@ -78,7 +92,7 @@ class AliExpressProvider:
         payload = self._to_order_payload(order_payload)
         if order_payload.get("sandbox"):
             return {"supplier_status": "supplier_submitted", "supplier_order_id": None, "copyable_payload": payload, "provider_response": {"sandbox": True}}
-        data = self.client.ds_method("aliexpress.ds.order.create", payload)
+        data = self.client.top_method("aliexpress.ds.order.create", payload)
         supplier_order_id = self._first_present(data, "order_id", "orderId", "id")
         result = data.get("result")
         if not supplier_order_id and isinstance(result, dict):
@@ -91,11 +105,11 @@ class AliExpressProvider:
         }
 
     def get_supplier_order(self, supplier_order_id: str) -> dict[str, Any]:
-        data = self.client.ds_method("aliexpress.ds.order.get", {"order_id": supplier_order_id})
+        data = self.client.top_method("aliexpress.ds.order.get", {"order_id": supplier_order_id})
         return {"order": self._normalize_order(data), "raw": data}
 
     def get_tracking(self, supplier_order_id: str) -> dict[str, Any]:
-        data = self.client.ds_method("aliexpress.ds.order.tracking.get", {"order_id": supplier_order_id})
+        data = self.client.top_method("aliexpress.ds.order.tracking.get", {"order_id": supplier_order_id})
         return {"tracking": self._normalize_tracking(data), "raw": data}
 
     def _to_order_payload(self, order_payload: dict[str, Any]) -> dict[str, Any]:
@@ -130,17 +144,23 @@ class AliExpressProvider:
 
     def _product_rows(self, data: dict[str, Any]) -> list[dict[str, Any]]:
         source: Any = data
-        for key in ("result", "aliexpress_ds_product_search_response", "resp_result"):
+        for key in (
+            "aliexpress_ds_recommend_feed_get_response",
+            "aliexpress_ds_product_get_response",
+            "aliexpress_ds_product_simplequery_response",
+            "result",
+            "resp_result",
+        ):
             if isinstance(source, dict) and isinstance(source.get(key), (dict, list)):
                 source = source[key]
         if isinstance(source, dict):
-            rows = source.get("products") or source.get("product_list") or source.get("aeopAEProductDisplayDTOList") or source.get("items")
+            rows = source.get("products") or source.get("product_list") or source.get("aeopAEProductDisplayDTOList") or source.get("items") or source.get("ae_item_base_info_dto")
             if isinstance(rows, dict):
                 rows = rows.get("item") or rows.get("product")
             if isinstance(rows, list):
                 return [row for row in rows if isinstance(row, dict)]
-            if self._first_present(source, "product_id", "productId", "ae_product_id"):
-                return [source]
+            if self._first_present(source, "product_id", "productId", "ae_product_id") or isinstance(source.get("ae_item_base_info_dto"), dict):
+                return [self._flatten_product(source)]
         return []
 
     def _first_product(self, data: dict[str, Any]) -> dict[str, Any]:
@@ -219,6 +239,55 @@ class AliExpressProvider:
             seen.add(key)
             result.append(product)
         return result
+
+    def _flatten_product(self, product: dict[str, Any]) -> dict[str, Any]:
+        base = product.get("ae_item_base_info_dto")
+        if isinstance(base, dict):
+            flattened = {**base, **product}
+            skus = product.get("ae_item_sku_info_dtos")
+            if isinstance(skus, dict):
+                flattened["ae_item_sku_info_dtos"] = skus.get("ae_item_sku_info_d_t_o") or skus.get("item") or skus
+            return flattened
+        return product
+
+    def _extract_product_id(self, query: str) -> str | None:
+        if query.isdigit() and len(query) >= 8:
+            return query
+        import re
+
+        match = re.search(r"(?:item|product|/)(\d{8,})", query)
+        return match.group(1) if match else None
+
+    def _query_keywords(self, query: str) -> list[str]:
+        normalized = query.strip().lower()
+        dictionary = {
+            "garrafa": "water bottle",
+            "copo": "water bottle",
+            "portatil": "portable",
+            "portátil": "portable",
+            "ventilador": "neck fan",
+            "pescoço": "neck fan",
+            "pescoco": "neck fan",
+            "carregador": "charger",
+            "aspirador": "vacuum cleaner",
+            "celular": "phone",
+        }
+        translated = normalized
+        for source, target in dictionary.items():
+            translated = translated.replace(source, target)
+        pieces = [query, translated, "portable water bottle", "neck fan", "phone accessories"]
+        return list(dict.fromkeys([piece.strip() for piece in pieces if piece.strip()]))
+
+    def _filter_products(self, products: list[dict[str, Any]], keyword: str) -> list[dict[str, Any]]:
+        needles = [part for part in keyword.lower().replace("/", " ").split() if len(part) >= 3]
+        if not needles:
+            return products
+        matched = []
+        for product in products:
+            haystack = " ".join(str(value) for value in product.values() if isinstance(value, (str, int, float))).lower()
+            if any(needle in haystack for needle in needles):
+                matched.append(product)
+        return matched or products[:12]
 
     def _first_present(self, data: dict[str, Any], *keys: str) -> Any:
         for key in keys:

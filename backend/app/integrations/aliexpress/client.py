@@ -5,6 +5,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from app.core.config import settings
@@ -18,6 +19,7 @@ class AliExpressClient:
         self._access_token = settings.aliexpress_access_token
         self._refresh_token = settings.aliexpress_refresh_token
         self.base_url = "https://api-sg.aliexpress.com/rest"
+        self.top_url = "https://eco.taobao.com/router/rest"
 
     def configured(self) -> bool:
         return bool(self.app_key and self.app_secret and self._access_token)
@@ -57,9 +59,45 @@ class AliExpressClient:
     def ds_method(self, method: str, payload: dict[str, Any]) -> dict[str, Any]:
         return self.call("/sync", {"method": method, **payload})
 
+    def top_method(self, method: str, payload: dict[str, Any], require_session: bool = True) -> dict[str, Any]:
+        if not self.app_key or not self.app_secret:
+            raise AliExpressError("ALIEXPRESS_APP_KEY and ALIEXPRESS_APP_SECRET are required.")
+        if require_session and not self._access_token:
+            raise AliExpressError("ALIEXPRESS_ACCESS_TOKEN is missing.")
+        top_payload: dict[str, Any] = {
+            "app_key": self.app_key,
+            "format": "json",
+            "method": method,
+            "partner_id": "nexora",
+            "sign_method": "hmac",
+            "timestamp": (datetime.now(UTC) + timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S"),
+            "v": "2.0",
+            "simplify": "true",
+            **payload,
+        }
+        if require_session:
+            top_payload["session"] = self._access_token
+        top_payload["sign"] = self._top_sign(top_payload)
+        data = self._post(self.top_url, top_payload)
+        self._raise_top_error(data)
+        return data
+
     def _sign(self, api_path: str, payload: dict[str, Any]) -> str:
         source = api_path + "".join(f"{key}{payload[key]}" for key in sorted(payload) if key != "sign")
         return hmac.new(self.app_secret.encode("utf-8"), source.encode("utf-8"), hashlib.sha256).hexdigest().upper()
+
+    def _top_sign(self, payload: dict[str, Any]) -> str:
+        source = "".join(f"{key}{self._encode_value(payload[key])}" for key in sorted(payload) if key != "sign")
+        return hmac.new(self.app_secret.encode("utf-8"), source.encode("utf-8"), hashlib.md5).hexdigest().upper()
+
+    def _raise_top_error(self, data: dict[str, Any]) -> None:
+        error = data.get("error_response")
+        if isinstance(error, dict):
+            message = error.get("sub_msg") or error.get("msg") or error
+            raise AliExpressError(f"AliExpress API error: {message}")
+        for value in data.values():
+            if isinstance(value, dict) and value.get("rsp_code") and str(value.get("rsp_code")) not in {"0", "200"}:
+                raise AliExpressError(str(value.get("rsp_msg") or value))
 
     def _post(self, url: str, payload: dict[str, Any]) -> dict[str, Any]:
         encoded = urllib.parse.urlencode({key: self._encode_value(value) for key, value in payload.items()}).encode("utf-8")
