@@ -1,11 +1,13 @@
 import re
 import uuid
+from datetime import UTC, datetime
 from html import unescape
 from decimal import Decimal
 from typing import Any
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -91,6 +93,7 @@ class SupplierService:
     def import_cj_product(self, payload: SupplierProductImportRequest) -> Product:
         if self.repo.db.scalar(select(Product).where(Product.supplier_product_id == payload.supplier_product_id, Product.deleted_at.is_(None))):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="CJ product is already imported")
+        self._release_deleted_import_conflicts(payload)
         detail = self._cj_product_detail(payload.supplier_product_id)
         supplier = self._get_or_create_cj_supplier()
         name = self._clean_title(payload.name or str(self._pick(detail, "productName", "name", "title", "productTitle") or "CJ Product"))
@@ -143,7 +146,11 @@ class SupplierService:
                 product.cost_price = variant_data.cost
         for index, image_url in enumerate(images[:8]):
             self.repo.db.add(ProductImage(product_id=product.id, url=image_url, alt_text=name, sort_order=index, is_primary=index == 0))
-        self.repo.db.commit()
+        try:
+            self.repo.db.commit()
+        except IntegrityError as exc:
+            self.repo.db.rollback()
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Produto apagado antigo ainda segurava SKU/variante. Tente importar novamente agora.") from exc
         self.repo.db.refresh(product)
         return product
 
@@ -310,6 +317,54 @@ class SupplierService:
         self.repo.db.add(supplier)
         self.repo.db.flush()
         return supplier
+
+    def _release_deleted_import_conflicts(self, payload: SupplierProductImportRequest) -> None:
+        variant_skus = [f"{variant.sku.upper()}-CJ" for variant in payload.variants if variant.sku]
+        product_skus = [payload.sku.upper(), payload.supplier_sku.upper() if payload.supplier_sku else ""]
+        deleted_products = list(
+            self.repo.db.scalars(
+                select(Product).where(
+                    Product.deleted_at.is_not(None),
+                    Product.supplier_product_id == payload.supplier_product_id,
+                )
+            )
+        )
+        if product_skus:
+            deleted_products.extend(
+                self.repo.db.scalars(
+                    select(Product).where(
+                        Product.deleted_at.is_not(None),
+                        Product.sku.in_([sku for sku in product_skus if sku]),
+                    )
+                )
+            )
+        if variant_skus:
+            deleted_products.extend(
+                self.repo.db.scalars(
+                    select(Product)
+                    .join(ProductVariant)
+                    .where(
+                        Product.deleted_at.is_not(None),
+                        ProductVariant.sku.in_(variant_skus),
+                    )
+                )
+            )
+
+        unique_products = list({product.id: product for product in deleted_products}.values())
+        if not unique_products:
+            return
+        suffix = f"-deleted-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
+        for product in unique_products:
+            if "-DELETED-" not in product.sku.upper():
+                product.sku = f"{product.sku[:60]}{suffix}".upper()
+            if "-deleted-" not in product.slug:
+                product.slug = f"{product.slug[:180]}{suffix}"
+            product.status = "deleted"
+            for variant in product.variants:
+                if "-DELETED-" not in variant.sku.upper():
+                    variant.sku = f"{variant.sku[:80]}{suffix}".upper()
+                variant.status = "deleted"
+        self.repo.db.flush()
 
     def _unique_slug(self, name: str) -> str:
         base = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "cj-product"

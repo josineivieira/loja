@@ -141,7 +141,10 @@ export async function importCjProduct(payload: {
     return data;
   } catch (error) {
     const detail = isAxiosError(error) ? error.response?.data?.detail : undefined;
-    throw new Error(typeof detail === "string" ? detail : "Nao foi possivel importar este produto da CJ.");
+    const message = Array.isArray(detail)
+      ? detail.map((item) => item?.msg || JSON.stringify(item)).join("; ")
+      : detail;
+    throw new Error(typeof message === "string" ? message : "Nao foi possivel importar este produto da CJ.");
   }
 }
 
