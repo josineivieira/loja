@@ -259,7 +259,18 @@ class CheckoutService:
                     tracking_available=item["tracking_available"],
                 )
             )
-        return quotes
+        return self._best_shipping_quotes(quotes)
+
+    def _best_shipping_quotes(self, quotes: list[ShippingQuote]) -> list[ShippingQuote]:
+        ordered = sorted(quotes, key=lambda quote: (quote.amount, quote.max_days, quote.min_days))
+        if len(ordered) <= 2:
+            return ordered
+        best_price = ordered[0]
+        fastest = min(ordered, key=lambda quote: (quote.max_days, quote.amount, quote.min_days))
+        selected = [best_price]
+        if fastest.code != best_price.code and len(selected) < 2:
+            selected.append(fastest)
+        return selected
 
     def _select_shipping(self, code: str | None, quotes: list[ShippingQuote]) -> ShippingQuote:
         if code:
