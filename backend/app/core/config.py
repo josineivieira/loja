@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     aliexpress_refresh_token: str = Field(default="", repr=False)
     aliexpress_sandbox: bool = True
     aliexpress_app_signature: str = "nexora"
+    aliexpress_enable_affiliate_search: bool = False
     aliexpress_price_markup_multiplier: float = 2.2
     aliexpress_price_markup_fixed: float = 4.9
     aliexpress_shipping_markup_multiplier: float = 1.0

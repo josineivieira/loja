@@ -23,23 +23,24 @@ class AliExpressProvider:
         responses: list[dict[str, Any]] = []
         errors: list[str] = []
         for keyword in self._query_keywords(query):
-            try:
-                data = self.client.ds_method(
-                    "aliexpress.affiliate.product.query",
-                    {
-                        "app_signature": settings.aliexpress_app_signature,
-                        "keywords": keyword,
-                        "target_language": "pt_BR",
-                        "target_currency": "BRL",
-                        "ship_to_country": "BR",
-                        "page_no": 1,
-                        "page_size": 30,
-                    },
-                    include_access_token=False,
-                )
-                responses.extend(self._filter_products(self._product_rows(data), keyword))
-            except AliExpressError as exc:
-                errors.append(str(exc))
+            if settings.aliexpress_enable_affiliate_search:
+                try:
+                    data = self.client.ds_method(
+                        "aliexpress.affiliate.product.query",
+                        {
+                            "app_signature": settings.aliexpress_app_signature,
+                            "keywords": keyword,
+                            "target_language": "pt_BR",
+                            "target_currency": "BRL",
+                            "ship_to_country": "BR",
+                            "page_no": 1,
+                            "page_size": 30,
+                        },
+                        include_access_token=False,
+                    )
+                    responses.extend(self._filter_products(self._product_rows(data), keyword))
+                except AliExpressError as exc:
+                    errors.append(str(exc))
             try:
                 data = self.client.ds_method(
                     "aliexpress.ds.recommend.feed.get",
@@ -59,7 +60,9 @@ class AliExpressProvider:
         if deduped:
             return deduped
         if errors:
-            raise AliExpressError(errors[-1])
+            actionable_errors = [error for error in errors if "permission" not in error.lower()]
+            if actionable_errors:
+                raise AliExpressError(actionable_errors[-1])
         return []
 
     def get_product(self, product_id: str) -> dict[str, Any]:
