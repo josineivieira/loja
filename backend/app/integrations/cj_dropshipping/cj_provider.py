@@ -32,6 +32,10 @@ class CJDropshippingProvider(SupplierProvider):
                 return exact_results
             results = []
         attempts = [
+            {"productCode": normalized},
+            {"productNo": normalized},
+            {"productId": normalized},
+            {"spu": normalized},
             {"sku": normalized},
             {"productSku": normalized},
             {"variantSku": normalized},
@@ -41,6 +45,8 @@ class CJDropshippingProvider(SupplierProvider):
         ]
         if not is_cj_identifier:
             attempts.insert(0, {"productName": normalized})
+        else:
+            attempts.append({"productName": normalized})
         for params in attempts:
             try:
                 result = self.client.get("/api2.0/v1/product/list", params)
@@ -85,7 +91,7 @@ class CJDropshippingProvider(SupplierProvider):
     def _product_matches_query(self, product: dict[str, Any], query: str) -> bool:
         needle = query.strip().upper()
         values: list[str] = []
-        for key in ("pid", "productId", "id", "productSku", "sku", "productNum", "vid", "variantId"):
+        for key in ("pid", "productId", "id", "productSku", "sku", "productNum", "productCode", "productNo", "spu", "vid", "variantId"):
             value = product.get(key)
             if value:
                 values.append(str(value).upper())
@@ -98,7 +104,16 @@ class CJDropshippingProvider(SupplierProvider):
                     value = variant.get(key)
                     if value:
                         values.append(str(value).upper())
-        return any(needle == value or needle in value for value in values)
+        return any(needle == value or needle in value for value in values) or self._deep_contains(product, needle)
+
+    def _deep_contains(self, value: Any, needle: str) -> bool:
+        if isinstance(value, dict):
+            return any(self._deep_contains(item, needle) for item in value.values())
+        if isinstance(value, list):
+            return any(self._deep_contains(item, needle) for item in value)
+        if value is None:
+            return False
+        return needle in str(value).upper()
 
     def _dedupe_products(self, products: list[dict[str, Any]]) -> list[dict[str, Any]]:
         seen: set[str] = set()
