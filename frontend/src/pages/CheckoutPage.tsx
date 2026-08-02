@@ -16,7 +16,7 @@ const defaultAddress: CheckoutAddressForm = {
   last_name: "",
   email: "",
   phone: "",
-  country: "US",
+  country: "BR",
   state: "",
   city: "",
   address_line1: "",
@@ -46,6 +46,7 @@ const addressFields: Array<[keyof CheckoutAddressForm, string]> = [
 function customerMessage(message: string) {
   if (message.includes("Enter the delivery address")) return "Informe seu endereco de entrega para verificar disponibilidade e frete.";
   if (message.includes("CJ did not return") || message.includes("shipping quote")) return "Ainda nao temos entrega disponivel para esse endereco com os produtos do carrinho. Confira o CEP ou escolha outro produto.";
+  if (message.includes("Delivery is not available")) return "Ainda nao temos entrega disponivel para esse endereco com os produtos do carrinho. Confira se o pais, CEP, estado e cidade estao corretos.";
   if (message.includes("without CJ variant IDs")) return "Este produto precisa ser atualizado antes de finalizar a compra.";
   return message;
 }
@@ -113,7 +114,7 @@ export function CheckoutPage() {
 
   useEffect(() => {
     const digits = watchedPostalCode?.replace(/\D/g, "") ?? "";
-    if (watchedCountry?.toUpperCase() !== "BR" || digits.length !== 8) return;
+    if (digits.length !== 8) return;
     const timeout = window.setTimeout(async () => {
       setCepStatus("Looking up postal code...");
       try {
@@ -123,6 +124,7 @@ export function CheckoutPage() {
           setCepStatus("Postal code not found.");
           return;
         }
+        if (watchedCountry?.toUpperCase() !== "BR") form.setValue("country", "BR", { shouldValidate: true });
         form.setValue("state", data.uf ?? "", { shouldValidate: true });
         form.setValue("city", data.localidade ?? "", { shouldValidate: true });
         if (data.logradouro) form.setValue("address_line1", data.logradouro, { shouldValidate: true });

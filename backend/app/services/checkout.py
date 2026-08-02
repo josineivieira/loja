@@ -243,8 +243,8 @@ class CheckoutService:
                 ],
             }
             result = self.cj.calculate_shipping(request_payload)
-        except CJDropshippingError:
-            return []
+        except CJDropshippingError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"CJ shipping error: {exc}") from exc
         quotes = []
         for item in result.get("quotes", []):
             amount = money((Decimal(str(item["amount"])) * Decimal(str(settings.cj_shipping_markup_multiplier))) + Decimal(str(settings.cj_shipping_markup_fixed)))

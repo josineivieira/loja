@@ -63,6 +63,7 @@ export function AdminProductsPage() {
   const [shippingQuotes, setShippingQuotes] = useState<SupplierShippingEstimate[]>([]);
   const [shippingLoading, setShippingLoading] = useState(false);
   const [shippingError, setShippingError] = useState<string | null>(null);
+  const [shippingCheckedVariants, setShippingCheckedVariants] = useState(0);
 
   const selectedVariants = useMemo(() => draft.variants.filter((variant) => variant.selected && variant.supplier_variant_id), [draft.variants]);
 
@@ -138,6 +139,7 @@ export function AdminProductsPage() {
       });
       setShippingQuotes([]);
       setShippingError(null);
+      setShippingCheckedVariants(0);
       setImportTab("product");
     } finally {
       setPreviewLoading(null);
@@ -191,27 +193,30 @@ export function AdminProductsPage() {
   }
 
   async function testShipping() {
-    const variant = selectedVariants[0];
-    if (!variant) {
+    if (!selectedVariants.length) {
       setShippingError("Selecione uma variante antes de testar a entrega.");
       return;
     }
     setShippingLoading(true);
     setShippingError(null);
     setShippingQuotes([]);
+    setShippingCheckedVariants(0);
     try {
-      setShippingQuotes(
-        await estimateCjVariantShipping({
+      const testedQuotes: SupplierShippingEstimate[][] = [];
+      for (const variant of selectedVariants) {
+        testedQuotes.push(await estimateCjVariantShipping({
           supplier_variant_id: variant.supplier_variant_id,
           quantity: 1,
           country: shippingAddress.country.toUpperCase(),
           state: shippingAddress.state,
           city: shippingAddress.city,
           postal_code: shippingAddress.postal_code,
-        }),
-      );
+        }));
+      }
+      setShippingCheckedVariants(selectedVariants.length);
+      setShippingQuotes(testedQuotes[0] ?? []);
     } catch (err) {
-      setShippingError(err instanceof Error ? err.message : "A CJ nao retornou entrega para esse destino.");
+      setShippingError(err instanceof Error ? err.message : "A CJ nao retornou entrega para todas as variantes selecionadas nesse destino.");
     } finally {
       setShippingLoading(false);
     }
@@ -394,8 +399,9 @@ export function AdminProductsPage() {
                       <input className="h-10 rounded-md border border-slate-200 px-3 text-sm" value={shippingAddress.city} onChange={(event) => setShippingAddress({ ...shippingAddress, city: event.target.value })} placeholder="Cidade" />
                       <input className="h-10 rounded-md border border-slate-200 px-3 text-sm" value={shippingAddress.postal_code} onChange={(event) => setShippingAddress({ ...shippingAddress, postal_code: event.target.value })} placeholder="CEP" />
                     </div>
-                    <button type="button" className="w-fit rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white" onClick={testShipping} disabled={shippingLoading}>{shippingLoading ? "Consultando CJ..." : "Testar entrega da primeira variante"}</button>
+                    <button type="button" className="w-fit rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white" onClick={testShipping} disabled={shippingLoading}>{shippingLoading ? "Consultando CJ..." : "Testar entrega das variantes selecionadas"}</button>
                     {shippingError ? <div className="rounded-md bg-red-50 p-3 text-sm text-danger">{shippingError}</div> : null}
+                    {shippingCheckedVariants ? <div className="rounded-md bg-green-50 p-3 text-sm text-emerald-700">CJ retornou entrega para {shippingCheckedVariants} variante(s) selecionada(s). As opcoes abaixo sao da primeira variante; no checkout o sistema recalcula o carrinho completo.</div> : null}
                     {shippingQuotes.length ? (
                       <div className="grid gap-2 md:grid-cols-3">
                         {shippingQuotes.map((quote) => (
