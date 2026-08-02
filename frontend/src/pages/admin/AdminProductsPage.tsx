@@ -15,6 +15,7 @@ import type { Product, SupplierProduct, SupplierShippingEstimate } from "../../t
 import { formatMoney } from "../../utils/currency";
 import { presentSupplierDescription, presentSupplierName } from "../../utils/productPresentation";
 import { usePreferencesStore } from "../../stores/preferencesStore";
+import { AxiosError } from "axios";
 
 type ImportTab = "product" | "variants" | "media" | "description" | "shipping";
 
@@ -45,6 +46,16 @@ function suggestedPrice(costValue: string | number) {
 
 function imageList(product: SupplierProduct) {
   return Array.from(new Set([...(product.images ?? []), product.image_url, ...product.variants.map((variant) => variant.image_url)].filter(Boolean) as string[]));
+}
+
+function apiErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof AxiosError) {
+    const detail = error.response?.data?.detail;
+    if (typeof detail === "string" && detail.trim()) return detail;
+    if (Array.isArray(detail)) return detail.map((item) => item?.msg || JSON.stringify(item)).join("; ");
+    if (error.message) return error.message;
+  }
+  return fallback;
 }
 
 export function AdminProductsPage() {
@@ -106,8 +117,8 @@ export function AdminProductsPage() {
       const results = await searchCjProducts(cjQuery);
       setCjProducts(results);
       if (!results.length) setError("Nenhum produto CJ bateu exatamente com essa busca. Se for SKU de variante, copie tambem o ID do produto/pid na CJ ou autorize a loja API na CJ.");
-    } catch {
-      setError("Nao foi possivel buscar na CJ. Confira CJ_API_KEY e SUPPLIER_PROVIDER=cj no Render backend.");
+    } catch (error) {
+      setError(apiErrorMessage(error, "Nao foi possivel buscar na CJ. Confira CJ_API_KEY e SUPPLIER_PROVIDER=cj no Render backend."));
     } finally {
       setCjLoading(false);
     }

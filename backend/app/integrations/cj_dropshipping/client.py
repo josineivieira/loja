@@ -1,4 +1,5 @@
 import json
+from json import JSONDecodeError
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -49,12 +50,15 @@ class CJDropshippingClient:
         request = Request(f"{self.base_url}{path}", data=body, headers=headers, method=method)
         try:
             with urlopen(request, timeout=30) as response:
-                data = json.loads(response.read().decode("utf-8"))
+                raw_body = response.read().decode("utf-8", errors="ignore")
+                data = json.loads(raw_body)
         except HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="ignore")
             raise CJDropshippingError(f"CJ API HTTP {exc.code}: {detail}") from exc
         except (URLError, TimeoutError) as exc:
             raise CJDropshippingError(f"CJ API request failed: {exc}") from exc
+        except JSONDecodeError as exc:
+            raise CJDropshippingError("CJ API returned an invalid non-JSON response.") from exc
         if isinstance(data, dict) and str(data.get("code")) not in {"200", "0", "None"} and data.get("success") is False:
             raise CJDropshippingError(f"CJ API error: {data}")
         return data
