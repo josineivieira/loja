@@ -37,17 +37,41 @@ class CJDropshippingProvider(SupplierProvider):
             if isinstance(rows, list):
                 results.extend([row for row in rows if isinstance(row, dict)])
         if not results and normalized.upper().startswith(("CJ", "CJAM", "CJJT", "CJST")):
-            try:
-                product = self.get_product(normalized)
-                if isinstance(product, dict):
-                    results.append(product)
-            except CJDropshippingError:
-                pass
+            for identifier in self._product_identifier_candidates(normalized):
+                try:
+                    product = self.get_product(identifier)
+                    if isinstance(product, dict) and product:
+                        results.append(product)
+                except CJDropshippingError:
+                    pass
         return self._dedupe_products(results)
 
     def get_product(self, supplier_product_id: str) -> dict[str, Any]:
-        result = self.client.get("/api2.0/v1/product/query", {"pid": supplier_product_id})
-        return result.get("data") or result
+        last_error: CJDropshippingError | None = None
+        for params in ({"pid": supplier_product_id}, {"sku": supplier_product_id}, {"productSku": supplier_product_id}, {"variantSku": supplier_product_id}, {"vid": supplier_product_id}):
+            try:
+                result = self.client.get("/api2.0/v1/product/query", params)
+            except CJDropshippingError as exc:
+                last_error = exc
+                continue
+            data = result.get("data") or result
+            if isinstance(data, dict) and data:
+                return data
+        if last_error:
+            raise last_error
+        return {}
+
+    def _product_identifier_candidates(self, value: str) -> list[str]:
+        normalized = value.strip()
+        candidates = [normalized]
+        for length in (11, 10, 12):
+            if len(normalized) > length:
+                candidates.append(normalized[:length])
+        if len(normalized) > 4:
+            candidates.append(normalized[:-4])
+        if len(normalized) > 2:
+            candidates.append(normalized[:-2])
+        return list(dict.fromkeys(candidates))
 
     def _dedupe_products(self, products: list[dict[str, Any]]) -> list[dict[str, Any]]:
         seen: set[str] = set()

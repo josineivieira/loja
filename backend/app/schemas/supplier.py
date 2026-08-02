@@ -50,6 +50,7 @@ class SupplierProductVariantRead(BaseModel):
     supplier_variant_id: str
     sku: str
     name: str | None = None
+    options: dict[str, str] = Field(default_factory=dict)
     price: Decimal
     cost: Decimal
     stock: int
@@ -71,6 +72,7 @@ class SupplierProductImportVariant(BaseModel):
     supplier_variant_id: str = Field(min_length=2, max_length=120)
     sku: str = Field(min_length=2, max_length=120)
     name: str | None = Field(default=None, max_length=180)
+    options: dict[str, str] = Field(default_factory=dict)
     sale_price: Decimal = Field(ge=0)
     cost_price: Decimal = Field(default=0, ge=0)
     stock: int = Field(default=0, ge=0)

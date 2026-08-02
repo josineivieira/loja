@@ -124,6 +124,7 @@ export async function importCjProduct(payload: {
     supplier_variant_id: string;
     sku: string;
     name?: string | null;
+    options?: Record<string, string>;
     sale_price: number;
     cost_price: number;
     stock: number;

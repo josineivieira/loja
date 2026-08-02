@@ -22,6 +22,7 @@ type ImportVariantDraft = {
   supplier_variant_id: string;
   sku: string;
   name: string;
+  options: Record<string, string>;
   sale_price: string;
   cost_price: string;
   stock: string;
@@ -127,6 +128,7 @@ export function AdminProductsPage() {
             supplier_variant_id: variant.supplier_variant_id,
             sku: variant.sku || `${fullProduct.sku}-${index + 1}`,
             name: variant.name || cleanName,
+            options: variant.options ?? {},
             sale_price: suggestedPrice(cost),
             cost_price: cost,
             stock: String(variant.stock ?? 0),
@@ -182,6 +184,7 @@ export function AdminProductsPage() {
           supplier_variant_id: variant.supplier_variant_id,
           sku: variant.sku,
           name: variant.name,
+          options: variant.options,
           sale_price: Number(variant.sale_price),
           cost_price: Number(variant.cost_price),
           stock: Number(variant.stock),
@@ -352,6 +355,7 @@ export function AdminProductsPage() {
                           <th className="px-2 py-2">Usar</th>
                           <th className="px-2 py-2">Imagem</th>
                           <th className="px-2 py-2">SKU CJ</th>
+                          <th className="px-2 py-2">Opcoes CJ</th>
                           <th className="px-2 py-2">Opcao</th>
                           <th className="px-2 py-2">Custo CJ</th>
                           <th className="px-2 py-2">Seu preco</th>
@@ -364,6 +368,7 @@ export function AdminProductsPage() {
                             <td className="px-2 py-2"><input type="checkbox" checked={variant.selected} onChange={(event) => updateVariant(index, { selected: event.target.checked })} /></td>
                             <td className="px-2 py-2">{variant.image_url ? <img src={variant.image_url} alt="" className="h-12 w-12 rounded-md object-cover" /> : <div className="h-12 w-12 rounded-md bg-mist" />}</td>
                             <td className="px-2 py-2 text-slate-600">{variant.sku}</td>
+                            <td className="px-2 py-2 text-slate-600">{Object.entries(variant.options).map(([key, value]) => `${key}: ${value}`).join(" / ") || "-"}</td>
                             <td className="px-2 py-2"><input className="h-9 w-48 rounded-md border border-slate-200 px-2" value={variant.name} onChange={(event) => updateVariant(index, { name: event.target.value })} /></td>
                             <td className="px-2 py-2"><input className="h-9 w-24 rounded-md border border-slate-200 px-2" value={variant.cost_price} onChange={(event) => updateVariant(index, { cost_price: event.target.value, sale_price: suggestedPrice(event.target.value) })} /></td>
                             <td className="px-2 py-2"><input className="h-9 w-24 rounded-md border border-slate-200 px-2 font-semibold" value={variant.sale_price} onChange={(event) => updateVariant(index, { sale_price: event.target.value })} /></td>

@@ -137,7 +137,7 @@ class SupplierService:
             )
             self.repo.db.add(variant)
             self.repo.db.flush()
-            self._attach_variant_options(product, variant, variant_data.name or variant_data.sku, description, index, option_cache)
+            self._attach_variant_options(product, variant, variant_data.options or {"Option": variant_data.name or variant_data.sku}, description, index, option_cache)
             if index == 0:
                 product.sale_price = variant_data.price
                 product.cost_price = variant_data.cost
@@ -344,6 +344,7 @@ class SupplierService:
                     supplier_variant_id=supplier_variant_id,
                     sku=str(self._pick(item, "productSku", "sku", "productNum") or f"CJ-{supplier_product_id}"),
                     name=name,
+                    options=self._variant_options_from_raw(item, name),
                     price=self._decimal(self._pick(item, "sellPrice", "price", "productPrice", "listedPrice"), Decimal("0")),
                     cost=self._decimal(self._pick(item, "sellPrice", "price", "productPrice", "listedPrice"), Decimal("0")),
                     stock=int(self._decimal(self._pick(item, "stock", "inventory", "sellableQuantity"), Decimal("999"))),
@@ -368,6 +369,7 @@ class SupplierService:
                 supplier_variant_id=variant.supplier_variant_id,
                 sku=variant.sku,
                 name=variant.name,
+                options=variant.options,
                 price=variant.sale_price,
                 cost=variant.cost_price,
                 stock=variant.stock,
@@ -394,6 +396,7 @@ class SupplierService:
                     supplier_variant_id=variant.supplier_variant_id,
                     sku=variant.sku,
                     name=variant.name,
+                    options=variant.options,
                     price=self._sale_price(variant.cost or variant.price),
                     cost=variant.cost,
                     stock=variant.stock,
@@ -406,6 +409,7 @@ class SupplierService:
                 supplier_variant_id=payload.supplier_variant_id,
                 sku=payload.supplier_sku or payload.sku,
                 name=payload.name,
+                options={},
                 price=payload.sale_price,
                 cost=payload.cost_price,
                 stock=payload.stock,
@@ -456,6 +460,7 @@ class SupplierService:
             supplier_variant_id=str(self._pick(item, "vid", "variantId", "id", "supplierVariantId") or ""),
             sku=str(self._pick(item, "variantSku", "sku", "variantKey", "variantNameEn") or "CJ-VARIANT"),
             name=self._pick(item, "variantName", "variantNameEn", "variantKey", "name") or fallback_name,
+            options=self._variant_options_from_raw(item, fallback_name),
             price=price,
             cost=self._decimal(self._pick(item, "costPrice", "variantStandard", "standard", "price"), price),
             stock=int(self._decimal(self._pick(item, "stock", "inventory", "sellableQuantity"), Decimal("999"))),
@@ -471,18 +476,23 @@ class SupplierService:
         index: int,
         option_cache: dict[tuple[str, str], ProductOptionValue],
     ) -> None:
-        parsed = self._parse_variant_options(raw_name, product_description, index)
+        raw_options: dict[str, str] = {}
+        if isinstance(raw_name, dict):
+            raw_options = raw_name
+            raw_name = " ".join(raw_options.values())
+        parsed = raw_options or self._parse_variant_options(str(raw_name), product_description, index)
         for option_name, label in parsed.items():
-            key = (option_name, label.lower())
+            normalized_option = self._normalize_option_name(option_name)
+            key = (normalized_option, label.lower())
             option_value = option_cache.get(key)
             if not option_value:
-                option = next((item for item in product.options if item.name == option_name), None)
+                option = next((item for item in product.options if item.name == normalized_option), None)
                 if not option:
                     option = ProductOption(
                         product_id=product.id,
-                        name=option_name,
-                        display_name="Cor" if option_name == "color" else "Tamanho" if option_name == "size" else "Opcao",
-                        sort_order=0 if option_name == "color" else 1,
+                        name=normalized_option,
+                        display_name=self._option_display_name(normalized_option),
+                        sort_order={"color": 0, "size": 1, "capacity": 2, "style": 3}.get(normalized_option, 9),
                     )
                     self.repo.db.add(option)
                     self.repo.db.flush()
@@ -493,6 +503,27 @@ class SupplierService:
                 option.values.append(option_value)
                 option_cache[key] = option_value
             self.repo.db.add(VariantOptionValue(variant_id=variant.id, option_value_id=option_value.id))
+
+    def _normalize_option_name(self, value: str) -> str:
+        cleaned = value.strip().lower()
+        if cleaned in {"cor", "colour"}:
+            return "color"
+        if cleaned in {"tamanho", "talla"}:
+            return "size"
+        if cleaned in {"capacidade"}:
+            return "capacity"
+        if cleaned in {"estilo"}:
+            return "style"
+        return cleaned or "option"
+
+    def _option_display_name(self, value: str) -> str:
+        return {
+            "color": "Cor",
+            "size": "Tamanho",
+            "capacity": "Capacidade",
+            "style": "Estilo",
+            "option": "Opcao",
+        }.get(value, value.title())
 
     def _parse_variant_options(self, raw_name: str, product_description: str, index: int) -> dict[str, str]:
         value = unescape(raw_name or "")
@@ -540,6 +571,69 @@ class SupplierService:
         if not parsed:
             parsed["option"] = f"Opcao {index + 1}"
         return parsed
+
+    def _variant_options_from_raw(self, item: dict[str, Any], fallback_name: str) -> dict[str, str]:
+        options: dict[str, str] = {}
+        direct_fields = {
+            "Color": self._pick(item, "color", "colour", "Color", "variantColor"),
+            "Size": self._pick(item, "size", "Size", "variantSize"),
+            "Capacity": self._pick(item, "capacity", "Capacity", "capacidade"),
+            "Style": self._pick(item, "style", "Style", "variantStyle"),
+        }
+        for key, value in direct_fields.items():
+            if value:
+                options[key] = str(value).strip()
+        candidates = [
+            self._pick(item, "variantNameEn", "variantName", "variantKey", "name"),
+            self._pick(item, "variantSku", "sku"),
+            fallback_name,
+        ]
+        text = " / ".join(str(value) for value in candidates if value)
+        if "Color" not in options:
+            color = self._extract_color(text)
+            if color:
+                options["Color"] = color
+        if "Size" not in options:
+            size = self._extract_size(text)
+            if size:
+                options["Size"] = size
+        if "Capacity" not in options:
+            capacity = self._extract_capacity(text)
+            if capacity:
+                options["Capacity"] = capacity
+        return options
+
+    def _extract_color(self, value: str) -> str | None:
+        colors = {
+            "white": "White",
+            "beige": "Beige",
+            "black": "Black",
+            "blue": "Blue",
+            "green": "Green",
+            "pink": "Pink",
+            "red": "Red",
+            "orange": "Orange",
+            "yellow": "Yellow",
+            "purple": "Purple",
+            "gray": "Gray",
+            "grey": "Gray",
+            "wine": "Wine",
+            "khaki": "Khaki",
+            "brown": "Brown",
+        }
+        lowered = value.lower()
+        for key, label in colors.items():
+            if re.search(rf"\b{re.escape(key)}\b", lowered):
+                return label
+        return None
+
+    def _extract_size(self, value: str) -> str | None:
+        match = re.search(r"\b(XXS|XS|S|M|L|XL|XXL|XXXL|2XL|3XL|4XL|5XL)\b", value, flags=re.IGNORECASE)
+        return match.group(1).upper() if match else None
+
+    def _extract_capacity(self, value: str) -> str | None:
+        match = re.search(r"\b(\d{2,5}\s*(?:mah|ml|l|gb|tb|w))\b", value, flags=re.IGNORECASE)
+        return re.sub(r"\s+", "", match.group(1)).lower() if match else None
 
     def _pick(self, data: dict[str, Any], *keys: str) -> Any:
         for key in keys:
