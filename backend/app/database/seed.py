@@ -36,13 +36,16 @@ def seed() -> None:
             db.flush()
 
         shipping_methods = [
-            ShippingMethod(name="Standard Shipping", code="standard", countries=[], min_days=10, max_days=20, amount=Decimal("9.90"), free_over_amount=Decimal("100.00")),
-            ShippingMethod(name="Express Shipping", code="express", countries=[], min_days=5, max_days=9, amount=Decimal("19.90")),
-            ShippingMethod(name="Free Shipping", code="free", countries=[], min_days=12, max_days=24, amount=Decimal("0.00"), free_over_amount=Decimal("0.00")),
+            ShippingMethod(name="Standard Shipping", code="standard", countries=["BR", "US"], min_days=10, max_days=20, amount=Decimal("9.90"), free_over_amount=Decimal("100.00")),
+            ShippingMethod(name="Express Shipping", code="express", countries=["BR", "US"], min_days=5, max_days=9, amount=Decimal("19.90")),
+            ShippingMethod(name="Free Shipping", code="free", countries=["BR", "US"], min_days=12, max_days=24, amount=Decimal("0.00"), free_over_amount=Decimal("0.00")),
         ]
         for method in shipping_methods:
-            if not db.query(ShippingMethod).filter_by(code=method.code).first():
+            existing = db.query(ShippingMethod).filter_by(code=method.code).first()
+            if not existing:
                 db.add(method)
+            elif not existing.countries:
+                existing.countries = method.countries
 
         coupons = [
             Coupon(code="WELCOME10", name="Welcome 10 percent", discount_type="percent", value=Decimal("10.00"), minimum_amount=Decimal("25.00")),

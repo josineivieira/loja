@@ -4,6 +4,16 @@ import type { CheckoutCalculateRequest, CheckoutCalculation, Order, PaymentSessi
 
 const demoFallbackEnabled = import.meta.env.VITE_ENABLE_DEMO_FALLBACK !== "false";
 
+function apiErrorMessage(error: unknown, fallback: string) {
+  if (typeof error === "object" && error && "response" in error) {
+    const response = (error as { response?: { data?: { detail?: unknown } } }).response;
+    const detail = response?.data?.detail;
+    if (typeof detail === "string") return detail;
+    if (Array.isArray(detail) && detail[0]?.msg) return detail[0].msg;
+  }
+  return fallback;
+}
+
 function calculateDemoCheckout(payload: CheckoutCalculateRequest): CheckoutCalculation {
   const lines = payload.items.map((item) => {
     const product = demoProducts.find((entry) => entry.id === item.product_id);
@@ -55,7 +65,7 @@ export async function calculateCheckout(payload: CheckoutCalculateRequest) {
     return data;
   } catch (error) {
     if (demoFallbackEnabled) return calculateDemoCheckout(payload);
-    throw error;
+    throw new Error(apiErrorMessage(error, "Unable to calculate checkout."));
   }
 }
 
@@ -64,7 +74,7 @@ export async function createOrder(payload: CheckoutCalculateRequest & { address:
     const { data } = await api.post<Order>("/checkout/create-order", payload);
     return data;
   } catch (error) {
-    if (!demoFallbackEnabled) throw error;
+    if (!demoFallbackEnabled) throw new Error(apiErrorMessage(error, "Unable to create order."));
     const calculation = calculateDemoCheckout(payload);
     return {
       id: crypto.randomUUID(),
@@ -91,7 +101,7 @@ export async function createPaymentSession(orderNumber: string) {
     const { data } = await api.post<PaymentSession>("/checkout/payment-session", { order_number: orderNumber });
     return data;
   } catch (error) {
-    if (!demoFallbackEnabled) throw error;
+    if (!demoFallbackEnabled) throw new Error(apiErrorMessage(error, "Unable to create payment session."));
     return {
       order_number: orderNumber,
       gateway: "stripe",

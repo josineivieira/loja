@@ -171,7 +171,7 @@ class CheckoutService:
                 )
             )
         if not quotes:
-            quotes.append(ShippingQuote(code="standard", name="Standard Shipping", amount=Decimal("9.90"), currency=currency, min_days=10, max_days=20, tracking_available=True))
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Shipping is not available for this destination")
         return quotes
 
     def _select_shipping(self, code: str | None, quotes: list[ShippingQuote]) -> ShippingQuote:

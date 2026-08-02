@@ -33,6 +33,7 @@ export function CheckoutPage() {
   const [shippingMethodCode, setShippingMethodCode] = useState<string | undefined>();
   const [calculation, setCalculation] = useState<CheckoutCalculation | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cepStatus, setCepStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -77,12 +78,43 @@ export function CheckoutPage() {
     recalculate();
   }, [payloadItems]);
 
+  const watchedPostalCode = form.watch("postal_code");
+  const watchedCountry = form.watch("country");
+
+  useEffect(() => {
+    const digits = watchedPostalCode?.replace(/\D/g, "") ?? "";
+    if (watchedCountry?.toUpperCase() !== "BR" || digits.length !== 8) return;
+    const timeout = window.setTimeout(async () => {
+      setCepStatus("Looking up postal code...");
+      try {
+        const response = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
+        const data = await response.json();
+        if (data.erro) {
+          setCepStatus("Postal code not found.");
+          return;
+        }
+        form.setValue("state", data.uf ?? "", { shouldValidate: true });
+        form.setValue("city", data.localidade ?? "", { shouldValidate: true });
+        if (data.logradouro) form.setValue("address_line1", data.logradouro, { shouldValidate: true });
+        if (data.bairro) form.setValue("district", data.bairro, { shouldValidate: true });
+        setCepStatus("Address filled from postal code. Add the street number.");
+      } catch {
+        setCepStatus("Unable to look up postal code.");
+      }
+    }, 400);
+    return () => window.clearTimeout(timeout);
+  }, [watchedPostalCode, watchedCountry, form]);
+
   async function applyCoupon() {
     await recalculate(form.getValues(), couponCode, shippingMethodCode);
   }
 
   async function continueCheckout() {
     if (loading || submitting) return;
+    if (step === 1) {
+      const isValid = await form.trigger(["first_name", "last_name", "email", "phone"]);
+      if (!isValid) return;
+    }
     if (step === 2) {
       const isValid = await form.trigger();
       if (!isValid) return;
@@ -100,6 +132,34 @@ export function CheckoutPage() {
     }
     setShippingMethodCode(code);
     await recalculate(form.getValues(), couponCode, code);
+  }
+
+  async function goToStep(targetStep: number) {
+    if (submitting || targetStep === step) return;
+    if (targetStep <= step) {
+      setStep(targetStep);
+      return;
+    }
+    if (targetStep >= 2) {
+      const isIdentityValid = await form.trigger(["first_name", "last_name", "email", "phone"]);
+      if (!isIdentityValid) {
+        setStep(1);
+        return;
+      }
+    }
+    if (targetStep >= 3) {
+      const isAddressValid = await form.trigger();
+      if (!isAddressValid) {
+        setStep(2);
+        return;
+      }
+      await recalculate(form.getValues());
+    }
+    if (targetStep >= 4 && !shippingMethodCode) {
+      setStep(3);
+      return;
+    }
+    setStep(targetStep);
   }
 
   async function submit(values: CheckoutAddressForm) {
@@ -167,7 +227,7 @@ export function CheckoutPage() {
             ["Payment", CreditCard],
             ["Review", PackageCheck],
           ].map(([label, Icon], index) => (
-            <button key={label as string} disabled={submitting} className={`rounded-md border px-3 py-3 text-left text-sm disabled:opacity-60 ${step === index + 1 ? "border-primary bg-blue-50 text-primary" : "border-slate-200"}`} onClick={() => setStep(index + 1)}>
+            <button key={label as string} disabled={submitting || loading} className={`rounded-md border px-3 py-3 text-left text-sm disabled:opacity-60 ${step === index + 1 ? "border-primary bg-blue-50 text-primary" : "border-slate-200"}`} onClick={() => goToStep(index + 1)}>
               <Icon className="mb-2 h-4 w-4" />
               {label as string}
             </button>
@@ -200,6 +260,7 @@ export function CheckoutPage() {
                   {form.formState.errors[name as keyof CheckoutAddressForm] ? <span className="mt-1 block text-xs text-danger">Invalid field</span> : null}
                 </label>
               ))}
+              {cepStatus ? <p className="text-sm text-slate-600 md:col-span-2">{cepStatus}</p> : null}
               <label className="text-sm font-medium md:col-span-2">
                 Notes
                 <textarea className="mt-2 min-h-24 w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-primary" {...form.register("notes")} />
