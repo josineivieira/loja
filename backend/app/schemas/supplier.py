@@ -62,8 +62,20 @@ class SupplierProductRead(BaseModel):
     sku: str
     description: str | None = None
     image_url: str | None = None
+    images: list[str] = Field(default_factory=list)
     variants: list[SupplierProductVariantRead]
-    raw: dict[str, Any] = {}
+    raw: dict[str, Any] = Field(default_factory=dict)
+
+
+class SupplierProductImportVariant(BaseModel):
+    supplier_variant_id: str = Field(min_length=2, max_length=120)
+    sku: str = Field(min_length=2, max_length=120)
+    name: str | None = Field(default=None, max_length=180)
+    sale_price: Decimal = Field(ge=0)
+    cost_price: Decimal = Field(default=0, ge=0)
+    stock: int = Field(default=0, ge=0)
+    image_url: str | None = None
+    selected: bool = True
 
 
 class SupplierProductImportRequest(BaseModel):
@@ -77,4 +89,25 @@ class SupplierProductImportRequest(BaseModel):
     supplier_sku: str | None = Field(default=None, max_length=120)
     description: str | None = None
     image_url: str | None = None
+    images: list[str] = Field(default_factory=list)
+    variants: list[SupplierProductImportVariant] = Field(default_factory=list)
     category_id: str | None = None
+
+
+class SupplierVariantShippingEstimateRequest(BaseModel):
+    supplier_variant_id: str = Field(min_length=2, max_length=120)
+    quantity: int = Field(default=1, ge=1, le=99)
+    country: str = Field(min_length=2, max_length=2)
+    state: str = Field(min_length=1, max_length=100)
+    city: str = Field(min_length=1, max_length=120)
+    postal_code: str = Field(min_length=3, max_length=30)
+
+
+class SupplierVariantShippingEstimateRead(BaseModel):
+    code: str
+    name: str
+    amount: Decimal
+    currency: str
+    min_days: int
+    max_days: int
+    tracking_available: bool

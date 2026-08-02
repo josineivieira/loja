@@ -22,7 +22,15 @@ from app.schemas.category import CategoryCreate, CategoryRead, CategoryUpdate
 from app.schemas.checkout import OrderRead
 from app.schemas.integrations import IntegrationStatusRead
 from app.schemas.product import ProductCreate, ProductRead, ProductUpdate
-from app.schemas.supplier import SupplierOrderPayloadRead, SupplierProductImportRequest, SupplierProductRead, SupplierSubmissionUpdate, SupplierTrackingUpdate
+from app.schemas.supplier import (
+    SupplierOrderPayloadRead,
+    SupplierProductImportRequest,
+    SupplierProductRead,
+    SupplierSubmissionUpdate,
+    SupplierTrackingUpdate,
+    SupplierVariantShippingEstimateRead,
+    SupplierVariantShippingEstimateRequest,
+)
 from app.services.admin import AdminService
 from app.services.catalog import CatalogService
 from app.services.supplier import SupplierService
@@ -139,6 +147,16 @@ def list_supplier_orders(_: AdminUser, db: Annotated[Session, Depends(get_db)]) 
 @router.get("/supplier/cj/products", response_model=list[SupplierProductRead])
 def search_cj_products(q: Annotated[str, Query(min_length=2)], _: AdminUser, db: Annotated[Session, Depends(get_db)]) -> list[SupplierProductRead]:
     return SupplierService(db).search_cj_products(q)
+
+
+@router.get("/supplier/cj/products/{supplier_product_id}", response_model=SupplierProductRead)
+def preview_cj_product(supplier_product_id: str, _: AdminUser, db: Annotated[Session, Depends(get_db)]) -> SupplierProductRead:
+    return SupplierService(db).preview_cj_product(supplier_product_id)
+
+
+@router.post("/supplier/cj/shipping-estimate", response_model=list[SupplierVariantShippingEstimateRead])
+def estimate_cj_shipping(payload: SupplierVariantShippingEstimateRequest, _: AdminUser, db: Annotated[Session, Depends(get_db)]) -> list[SupplierVariantShippingEstimateRead]:
+    return SupplierService(db).estimate_cj_shipping(payload)
 
 
 @router.post("/supplier/cj/import", response_model=ProductRead, status_code=201)

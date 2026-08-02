@@ -3,7 +3,7 @@ import { AxiosError } from "axios";
 import { demoAdmin } from "../data/demoAdmin";
 import type { AdminCustomer, AdminDashboard, Coupon, IntegrationStatus, ShippingMethod, SupplierOrderPayload } from "../types/admin";
 import type { Order } from "../types/checkout";
-import type { Product, SupplierProduct } from "../types/catalog";
+import type { Product, SupplierProduct, SupplierShippingEstimate } from "../types/catalog";
 
 const demoFallbackEnabled = import.meta.env.VITE_ENABLE_DEMO_FALLBACK !== "false";
 
@@ -91,6 +91,23 @@ export async function searchCjProducts(query: string) {
   return data;
 }
 
+export async function previewCjProduct(productId: string) {
+  const { data } = await api.get<SupplierProduct>(`/admin/supplier/cj/products/${productId}`);
+  return data;
+}
+
+export async function estimateCjVariantShipping(payload: {
+  supplier_variant_id: string;
+  quantity: number;
+  country: string;
+  state: string;
+  city: string;
+  postal_code: string;
+}) {
+  const { data } = await api.post<SupplierShippingEstimate[]>("/admin/supplier/cj/shipping-estimate", payload);
+  return data;
+}
+
 export async function importCjProduct(payload: {
   supplier_product_id: string;
   name: string;
@@ -102,6 +119,17 @@ export async function importCjProduct(payload: {
   supplier_sku?: string;
   description?: string | null;
   image_url?: string | null;
+  images?: string[];
+  variants?: Array<{
+    supplier_variant_id: string;
+    sku: string;
+    name?: string | null;
+    sale_price: number;
+    cost_price: number;
+    stock: number;
+    image_url?: string | null;
+    selected: boolean;
+  }>;
 }) {
   try {
     const { data } = await api.post<Product>("/admin/supplier/cj/import", payload);

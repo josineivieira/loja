@@ -23,6 +23,8 @@ from app.schemas.supplier import (
     SupplierProductVariantRead,
     SupplierSubmissionUpdate,
     SupplierTrackingUpdate,
+    SupplierVariantShippingEstimateRead,
+    SupplierVariantShippingEstimateRequest,
 )
 
 
@@ -47,18 +49,59 @@ class SupplierService:
             mapped.sort(key=lambda item: 0 if needle in f"{item.sku} {item.supplier_product_id} {' '.join(variant.sku for variant in item.variants)}".upper() else 1)
         return mapped
 
+    def preview_cj_product(self, supplier_product_id: str) -> SupplierProductRead:
+        detail = self._cj_product_detail(supplier_product_id)
+        if not detail:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CJ product detail was not found")
+        return self._map_supplier_product(detail)
+
+    def estimate_cj_shipping(self, payload: SupplierVariantShippingEstimateRequest) -> list[SupplierVariantShippingEstimateRead]:
+        try:
+            result = self.provider.calculate_shipping(
+                {
+                    "startCountryCode": settings.cj_default_from_country,
+                    "endCountryCode": payload.country.upper(),
+                    "shippingZip": payload.postal_code,
+                    "shippingCountryCode": payload.country.upper(),
+                    "shippingProvince": payload.state,
+                    "shippingCity": payload.city,
+                    "products": [{"vid": payload.supplier_variant_id, "quantity": payload.quantity}],
+                }
+            )
+        except CJDropshippingError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        estimates: list[SupplierVariantShippingEstimateRead] = []
+        for item in result.get("quotes", []):
+            estimates.append(
+                SupplierVariantShippingEstimateRead(
+                    code=item["code"],
+                    name=f"CJ {item['name']}",
+                    amount=item["amount"],
+                    currency=item["currency"],
+                    min_days=item["min_days"],
+                    max_days=item["max_days"],
+                    tracking_available=item["tracking_available"],
+                )
+            )
+        if not estimates:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="CJ did not return shipping options for this destination")
+        return estimates
+
     def import_cj_product(self, payload: SupplierProductImportRequest) -> Product:
         if self.repo.db.scalar(select(Product).where(Product.supplier_product_id == payload.supplier_product_id, Product.deleted_at.is_(None))):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="CJ product is already imported")
         detail = self._cj_product_detail(payload.supplier_product_id)
         supplier = self._get_or_create_cj_supplier()
-        name = str(self._pick(detail, "productName", "name", "title", "productTitle") or payload.name)
-        description = self._clean_description(str(self._pick(detail, "description", "productDescription", "descriptionEn", "productDescriptionEn") or payload.description or ""))
+        name = payload.name or str(self._pick(detail, "productName", "name", "title", "productTitle") or "CJ Product")
+        description = self._clean_description(str(payload.description or self._pick(detail, "description", "productDescription", "descriptionEn", "productDescriptionEn") or ""))
         short_description = self._summary(description, name)
-        images = self._images(detail, payload.image_url)
-        variants = self._detail_variants(detail, payload)
+        images = list(dict.fromkeys([*(payload.images or []), *self._images(detail, payload.image_url)]))
+        variants = self._import_variants(payload) or self._detail_variants(detail, payload)
+        if not variants:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Select at least one CJ variant with a valid variant ID")
         slug = self._unique_slug(name)
-        sale_price = self._sale_price(payload.cost_price or payload.sale_price)
+        first_variant = variants[0]
+        sale_price = first_variant.price
         product = Product(
             supplier_id=supplier.id,
             category_id=uuid.UUID(payload.category_id) if payload.category_id else None,
@@ -69,7 +112,7 @@ class SupplierService:
             sku=self._unique_sku(payload.sku.upper(), Product),
             supplier_sku=payload.supplier_sku or payload.sku,
             supplier_product_id=payload.supplier_product_id,
-            cost_price=payload.cost_price,
+            cost_price=first_variant.cost,
             sale_price=sale_price,
             currency="USD",
             status="active",
@@ -80,23 +123,21 @@ class SupplierService:
         self.repo.db.add(product)
         self.repo.db.flush()
         for index, variant_data in enumerate(variants):
-            variant_cost = variant_data.cost or payload.cost_price
-            variant_price = self._sale_price(variant_cost or payload.sale_price)
             self.repo.db.add(
                 ProductVariant(
                     product_id=product.id,
                     sku=self._unique_sku(f"{variant_data.sku.upper()}-CJ", ProductVariant),
                     supplier_variant_id=variant_data.supplier_variant_id,
-                    price=variant_price,
-                    cost=variant_cost,
+                    price=variant_data.price,
+                    cost=variant_data.cost,
                     stock=variant_data.stock,
                     image_url=variant_data.image_url or payload.image_url,
                     status="active",
                 )
             )
             if index == 0:
-                product.sale_price = variant_price
-                product.cost_price = variant_cost
+                product.sale_price = variant_data.price
+                product.cost_price = variant_data.cost
         for index, image_url in enumerate(images[:8]):
             self.repo.db.add(ProductImage(product_id=product.id, url=image_url, alt_text=name, sort_order=index, is_primary=index == 0))
         self.repo.db.commit()
@@ -312,9 +353,26 @@ class SupplierService:
             sku=str(self._pick(item, "productSku", "sku", "productNum") or f"CJ-{supplier_product_id}"),
             description=self._pick(item, "description", "productDescription"),
             image_url=image_url,
+            images=self._images(item, image_url),
             variants=variants,
             raw=item,
         )
+
+    def _import_variants(self, payload: SupplierProductImportRequest) -> list[SupplierProductVariantRead]:
+        selected = [variant for variant in payload.variants if variant.selected]
+        return [
+            SupplierProductVariantRead(
+                supplier_variant_id=variant.supplier_variant_id,
+                sku=variant.sku,
+                name=variant.name,
+                price=variant.sale_price,
+                cost=variant.cost_price,
+                stock=variant.stock,
+                image_url=variant.image_url,
+            )
+            for variant in selected
+            if variant.supplier_variant_id
+        ]
 
     def _cj_product_detail(self, supplier_product_id: str) -> dict[str, Any]:
         try:
@@ -328,7 +386,18 @@ class SupplierService:
         variants = [self._map_supplier_variant(variant, payload.name, payload.image_url) for variant in variants_raw if isinstance(variant, dict)]
         variants = [variant for variant in variants if variant.supplier_variant_id]
         if variants:
-            return variants[:20]
+            return [
+                SupplierProductVariantRead(
+                    supplier_variant_id=variant.supplier_variant_id,
+                    sku=variant.sku,
+                    name=variant.name,
+                    price=self._sale_price(variant.cost or variant.price),
+                    cost=variant.cost,
+                    stock=variant.stock,
+                    image_url=variant.image_url,
+                )
+                for variant in variants[:20]
+            ]
         return [
             SupplierProductVariantRead(
                 supplier_variant_id=payload.supplier_variant_id,

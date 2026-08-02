@@ -46,7 +46,19 @@ export type SupplierProduct = {
   sku: string;
   description?: string | null;
   image_url?: string | null;
+  images?: string[];
   variants: SupplierProductVariant[];
+  raw?: Record<string, unknown>;
+};
+
+export type SupplierShippingEstimate = {
+  code: string;
+  name: string;
+  amount: string;
+  currency: string;
+  min_days: number;
+  max_days: number;
+  tracking_available: boolean;
 };
 
 export type ProductImage = {
