@@ -81,6 +81,25 @@ export function CheckoutPage() {
     await recalculate(form.getValues(), couponCode, shippingMethodCode);
   }
 
+  async function continueCheckout() {
+    if (step === 2) {
+      const isValid = await form.trigger();
+      if (!isValid) return;
+      await recalculate(form.getValues());
+    }
+    setStep((value) => value + 1);
+  }
+
+  async function selectShippingMethod(code: string) {
+    const isValid = await form.trigger();
+    if (!isValid) {
+      setStep(2);
+      return;
+    }
+    setShippingMethodCode(code);
+    await recalculate(form.getValues(), couponCode, code);
+  }
+
   async function submit(values: CheckoutAddressForm) {
     if (!calculation) return;
     setSubmitting(true);
@@ -188,7 +207,7 @@ export function CheckoutPage() {
                     </span>
                     <span className="flex items-center gap-3">
                       <span className="font-semibold">{Number(method.amount) === 0 ? "Free" : formatMoney(Number(method.amount), method.currency)}</span>
-                      <input type="radio" checked={shippingMethodCode === method.code} onChange={() => { setShippingMethodCode(method.code); recalculate(form.getValues(), couponCode, method.code); }} />
+                      <input type="radio" checked={shippingMethodCode === method.code} onChange={() => selectShippingMethod(method.code)} />
                     </span>
                   </label>
                 ))}
@@ -224,7 +243,7 @@ export function CheckoutPage() {
               Back
             </button>
             {step < 5 ? (
-              <button type="button" className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white" onClick={async () => { if (step === 2) await recalculate(form.getValues()); setStep((value) => value + 1); }}>
+              <button type="button" className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white" onClick={continueCheckout}>
                 Continue
               </button>
             ) : (
