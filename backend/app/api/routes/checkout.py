@@ -7,7 +7,7 @@ from app.api.dependencies.auth import bearer_scheme
 from app.api.dependencies.auth import get_current_user
 from app.database.session import get_db
 from app.models.user import User
-from app.schemas.checkout import CheckoutCalculateRequest, CheckoutCalculationResponse, CheckoutCreateOrderRequest, OrderRead
+from app.schemas.checkout import CheckoutCalculateRequest, CheckoutCalculationResponse, CheckoutCreateOrderRequest, OrderRead, ShippingEstimateRequest, ShippingQuote
 from app.schemas.payment import PaymentSessionRequest, PaymentSessionResponse
 from app.services.checkout import CheckoutService
 from app.services.payments import PaymentService
@@ -18,6 +18,11 @@ router = APIRouter(prefix="/checkout", tags=["Checkout"])
 @router.post("/calculate", response_model=CheckoutCalculationResponse)
 def calculate_checkout(payload: CheckoutCalculateRequest, db: Annotated[Session, Depends(get_db)]) -> CheckoutCalculationResponse:
     return CheckoutService(db).calculate(payload)
+
+
+@router.post("/shipping-estimate", response_model=list[ShippingQuote])
+def estimate_shipping(payload: ShippingEstimateRequest, db: Annotated[Session, Depends(get_db)]) -> list[ShippingQuote]:
+    return CheckoutService(db).estimate_shipping(payload)
 
 
 @router.post("/create-order", response_model=OrderRead, status_code=201)

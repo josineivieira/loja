@@ -68,6 +68,16 @@ class CheckoutCreateOrderRequest(CheckoutCalculateRequest):
     idempotency_key: str = Field(min_length=8, max_length=120)
 
 
+class ShippingEstimateRequest(BaseModel):
+    variant_id: uuid.UUID
+    quantity: int = Field(default=1, ge=1, le=99)
+    country: str = Field(min_length=2, max_length=2)
+    state: str = Field(min_length=1, max_length=100)
+    city: str = Field(min_length=1, max_length=120)
+    postal_code: str = Field(min_length=3, max_length=30)
+    currency: str = Field(default="USD", min_length=3, max_length=3)
+
+
 class CheckoutLine(BaseModel):
     product_id: uuid.UUID
     variant_id: uuid.UUID

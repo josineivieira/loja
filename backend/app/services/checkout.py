@@ -13,8 +13,11 @@ from app.schemas.checkout import (
     CheckoutCalculateRequest,
     CheckoutCalculationResponse,
     CheckoutCreateOrderRequest,
+    CheckoutAddress,
+    CheckoutItem,
     CheckoutLine,
     CheckoutTotals,
+    ShippingEstimateRequest,
     ShippingQuote,
 )
 
@@ -150,6 +153,33 @@ class CheckoutService:
 
     def list_customer_orders(self, customer_id: str) -> list[Order]:
         return self.repo.list_orders_for_customer(customer_id)
+
+    def estimate_shipping(self, payload: ShippingEstimateRequest) -> list[ShippingQuote]:
+        variants = self.repo.get_variants([payload.variant_id])
+        variant = variants[0] if variants else None
+        if not variant or not variant.product or variant.product.deleted_at or variant.product.status != "active":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Product is unavailable")
+        calculation = self.calculate(
+            CheckoutCalculateRequest(
+                items=[CheckoutItem(product_id=variant.product_id, variant_id=variant.id, quantity=payload.quantity)],
+                address=CheckoutAddress(
+                    first_name="Delivery",
+                    last_name="Check",
+                    email="delivery-check@nexora.local",
+                    phone=None,
+                    country=payload.country.upper(),
+                    state=payload.state,
+                    city=payload.city,
+                    address_line1="Address 123",
+                    address_line2=None,
+                    district=None,
+                    postal_code=payload.postal_code,
+                    notes=None,
+                ),
+                currency=payload.currency.upper(),
+            )
+        )
+        return calculation.shipping_methods
 
     def _calculate_discount(self, coupon_code: str | None, subtotal: Decimal) -> Decimal:
         if not coupon_code:

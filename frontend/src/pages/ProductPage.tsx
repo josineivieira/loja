@@ -5,11 +5,13 @@ import { Link, useParams } from "react-router-dom";
 import { QuantityStepper } from "../components/QuantityStepper";
 import { Seo } from "../components/Seo";
 import { getProduct } from "../services/catalogService";
+import { estimateShipping } from "../services/checkoutService";
 import { listProductReviews } from "../services/engagementService";
 import { useCartStore } from "../stores/cartStore";
 import { useFavoritesStore } from "../stores/favoritesStore";
 import { usePreferencesStore } from "../stores/preferencesStore";
 import type { Product, ProductVariant } from "../types/catalog";
+import type { ShippingQuote } from "../types/checkout";
 import type { Review } from "../types/engagement";
 import { formatMoney } from "../utils/currency";
 
@@ -24,6 +26,10 @@ export function ProductPage() {
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [activeImage, setActiveImage] = useState<string | null>(null);
+  const [deliveryForm, setDeliveryForm] = useState({ country: "BR", postal_code: "", state: "", city: "" });
+  const [deliveryQuotes, setDeliveryQuotes] = useState<ShippingQuote[]>([]);
+  const [deliveryStatus, setDeliveryStatus] = useState<string | null>(null);
+  const [checkingDelivery, setCheckingDelivery] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -71,6 +77,47 @@ export function ProductPage() {
       currency: product.currency,
       price: displayPrice,
     });
+  }
+
+  useEffect(() => {
+    const digits = deliveryForm.postal_code.replace(/\D/g, "");
+    if (deliveryForm.country.toUpperCase() !== "BR" || digits.length !== 8) return;
+    const timeout = window.setTimeout(async () => {
+      try {
+        const response = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
+        const data = await response.json();
+        if (!data.erro) {
+          setDeliveryForm((value) => ({ ...value, state: data.uf ?? value.state, city: data.localidade ?? value.city }));
+        }
+      } catch {
+        // Delivery can still be checked manually if ViaCEP is unavailable.
+      }
+    }, 350);
+    return () => window.clearTimeout(timeout);
+  }, [deliveryForm.country, deliveryForm.postal_code]);
+
+  async function checkDelivery() {
+    if (!selectedVariant || !product) return;
+    setCheckingDelivery(true);
+    setDeliveryStatus(null);
+    setDeliveryQuotes([]);
+    try {
+      const quotes = await estimateShipping({
+        variant_id: selectedVariant.id,
+        quantity,
+        country: deliveryForm.country,
+        state: deliveryForm.state,
+        city: deliveryForm.city,
+        postal_code: deliveryForm.postal_code,
+        currency: product.currency,
+      });
+      setDeliveryQuotes(quotes);
+      setDeliveryStatus(quotes.length ? "Entrega disponivel para este destino." : "Ainda nao temos entrega disponivel para este destino.");
+    } catch {
+      setDeliveryStatus("Ainda nao temos entrega disponivel para este destino.");
+    } finally {
+      setCheckingDelivery(false);
+    }
   }
 
   if (loading) return <div className="mx-auto max-w-7xl px-4 py-12 text-slate-600">Loading product...</div>;
@@ -141,6 +188,36 @@ export function ProductPage() {
             </button>
           </div>
           {!canBuy ? <p className="mt-3 text-sm text-danger">Select an available variant before adding this product to the cart.</p> : null}
+
+          <section className="mt-8 rounded-lg border border-slate-200 p-4">
+            <div className="flex items-center gap-2">
+              <Truck className="h-5 w-5 text-primary" />
+              <h2 className="font-semibold">Consultar entrega</h2>
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-[88px_1fr_1fr_1fr_auto]">
+              <input className="h-10 rounded-md border border-slate-200 px-3 text-sm" placeholder="Pais" value={deliveryForm.country} onChange={(event) => setDeliveryForm({ ...deliveryForm, country: event.target.value.toUpperCase() })} maxLength={2} />
+              <input className="h-10 rounded-md border border-slate-200 px-3 text-sm" placeholder="CEP / codigo postal" value={deliveryForm.postal_code} onChange={(event) => setDeliveryForm({ ...deliveryForm, postal_code: event.target.value })} />
+              <input className="h-10 rounded-md border border-slate-200 px-3 text-sm" placeholder="Estado" value={deliveryForm.state} onChange={(event) => setDeliveryForm({ ...deliveryForm, state: event.target.value })} />
+              <input className="h-10 rounded-md border border-slate-200 px-3 text-sm" placeholder="Cidade" value={deliveryForm.city} onChange={(event) => setDeliveryForm({ ...deliveryForm, city: event.target.value })} />
+              <button className="rounded-md bg-primary px-4 text-sm font-semibold text-white disabled:bg-slate-300" disabled={checkingDelivery || !selectedVariant || !deliveryForm.postal_code || !deliveryForm.state || !deliveryForm.city} onClick={checkDelivery}>
+                {checkingDelivery ? "Verificando..." : "Verificar"}
+              </button>
+            </div>
+            {deliveryStatus ? <p className={`mt-3 text-sm ${deliveryQuotes.length ? "text-emerald-700" : "text-danger"}`}>{deliveryStatus}</p> : null}
+            {deliveryQuotes.length ? (
+              <div className="mt-3 grid gap-2">
+                {deliveryQuotes.slice(0, 3).map((quote) => (
+                  <div key={quote.code} className="flex items-center justify-between rounded-md bg-mist p-3 text-sm">
+                    <span>
+                      <span className="block font-semibold">{quote.name}</span>
+                      <span className="text-slate-600">{quote.min_days}-{quote.max_days} dias uteis</span>
+                    </span>
+                    <span className="font-semibold">{formatMoney(Number(quote.amount), quote.currency, displayCurrency)}</span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </section>
 
           <div className="mt-8 grid gap-3 text-sm sm:grid-cols-3">
             <div className="rounded-lg border border-slate-200 p-4">

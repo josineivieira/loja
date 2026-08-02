@@ -1,6 +1,6 @@
 import { api } from "./api";
 import { demoProducts } from "../data/demoCatalog";
-import type { CheckoutCalculateRequest, CheckoutCalculation, Order, PaymentSession } from "../types/checkout";
+import type { CheckoutCalculateRequest, CheckoutCalculation, Order, PaymentSession, ShippingQuote } from "../types/checkout";
 
 const demoFallbackEnabled = import.meta.env.VITE_ENABLE_DEMO_FALLBACK === "true";
 
@@ -66,6 +66,23 @@ export async function calculateCheckout(payload: CheckoutCalculateRequest) {
   } catch (error) {
     if (demoFallbackEnabled) return calculateDemoCheckout(payload);
     throw new Error(apiErrorMessage(error, "Unable to calculate checkout."));
+  }
+}
+
+export async function estimateShipping(payload: {
+  variant_id: string;
+  quantity: number;
+  country: string;
+  state: string;
+  city: string;
+  postal_code: string;
+  currency: string;
+}) {
+  try {
+    const { data } = await api.post<ShippingQuote[]>("/checkout/shipping-estimate", payload);
+    return data;
+  } catch (error) {
+    throw new Error(apiErrorMessage(error, "Delivery is not available for this destination."));
   }
 }
 
