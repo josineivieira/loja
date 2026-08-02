@@ -7,6 +7,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { calculateCheckout, createOrder, createPaymentSession } from "../services/checkoutService";
 import { checkoutAddressSchema, type CheckoutAddressForm } from "../schemas/checkoutSchemas";
 import { useCartStore } from "../stores/cartStore";
+import { usePreferencesStore } from "../stores/preferencesStore";
 import type { CheckoutCalculation } from "../types/checkout";
 import { formatMoney } from "../utils/currency";
 
@@ -28,6 +29,7 @@ const defaultAddress: CheckoutAddressForm = {
 export function CheckoutPage() {
   const navigate = useNavigate();
   const { items, clear } = useCartStore();
+  const displayCurrency = usePreferencesStore((state) => state.currency);
   const [step, setStep] = useState(1);
   const [couponCode, setCouponCode] = useState("");
   const [shippingMethodCode, setShippingMethodCode] = useState<string | undefined>();
@@ -289,7 +291,7 @@ export function CheckoutPage() {
                       <span className="mt-1 block text-sm text-slate-600">{method.min_days}-{method.max_days} business days</span>
                     </span>
                     <span className="flex items-center gap-3">
-                      <span className="font-semibold">{Number(method.amount) === 0 ? "Free" : formatMoney(Number(method.amount), method.currency)}</span>
+                      <span className="font-semibold">{Number(method.amount) === 0 ? "Free" : formatMoney(Number(method.amount), method.currency, displayCurrency)}</span>
                       <input type="radio" checked={shippingMethodCode === method.code} onChange={() => selectShippingMethod(method.code)} />
                     </span>
                   </label>
@@ -314,7 +316,7 @@ export function CheckoutPage() {
                 {calculation?.items.map((item) => (
                   <div key={item.variant_id} className="flex justify-between gap-4 rounded-md bg-mist p-3 text-sm">
                     <span>{item.product_name} x {item.quantity}</span>
-                    <span>{formatMoney(Number(item.total_price), item.currency)}</span>
+                    <span>{formatMoney(Number(item.total_price), item.currency, displayCurrency)}</span>
                   </div>
                 ))}
               </div>
@@ -346,14 +348,15 @@ export function CheckoutPage() {
             </button>
           </div>
           <div className="mt-5 space-y-3 text-sm">
-            <div className="flex justify-between"><span className="text-slate-600">Subtotal</span><span>{formatMoney(Number(totals?.subtotal_amount ?? 0), currency)}</span></div>
-            <div className="flex justify-between"><span className="text-slate-600">Discount</span><span>{formatMoney(Number(totals?.discount_amount ?? 0), currency)}</span></div>
-            <div className="flex justify-between"><span className="text-slate-600">Shipping</span><span>{formatMoney(Number(totals?.shipping_amount ?? 0), currency)}</span></div>
-            <div className="flex justify-between"><span className="text-slate-600">Taxes</span><span>{formatMoney(Number(totals?.tax_amount ?? 0), currency)}</span></div>
+            <div className="flex justify-between"><span className="text-slate-600">Subtotal</span><span>{formatMoney(Number(totals?.subtotal_amount ?? 0), currency, displayCurrency)}</span></div>
+            <div className="flex justify-between"><span className="text-slate-600">Discount</span><span>{formatMoney(Number(totals?.discount_amount ?? 0), currency, displayCurrency)}</span></div>
+            <div className="flex justify-between"><span className="text-slate-600">Shipping</span><span>{formatMoney(Number(totals?.shipping_amount ?? 0), currency, displayCurrency)}</span></div>
+            <div className="flex justify-between"><span className="text-slate-600">Taxes</span><span>{formatMoney(Number(totals?.tax_amount ?? 0), currency, displayCurrency)}</span></div>
             <div className="border-t border-slate-200 pt-3 text-base font-semibold">
-              <div className="flex justify-between"><span>Total</span><span>{formatMoney(Number(totals?.total_amount ?? 0), currency)}</span></div>
+              <div className="flex justify-between"><span>Total</span><span>{formatMoney(Number(totals?.total_amount ?? 0), currency, displayCurrency)}</span></div>
             </div>
           </div>
+          {displayCurrency !== currency ? <p className="mt-3 text-xs leading-5 text-slate-500">Reference display in {displayCurrency}. Final charge is processed in {currency}.</p> : null}
           <p className="mt-4 text-xs leading-5 text-slate-500">The backend recalculates product prices, discounts, shipping and stock before creating the order.</p>
         </aside>
       </form>

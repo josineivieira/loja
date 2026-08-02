@@ -8,6 +8,7 @@ import { getProduct } from "../services/catalogService";
 import { listProductReviews } from "../services/engagementService";
 import { useCartStore } from "../stores/cartStore";
 import { useFavoritesStore } from "../stores/favoritesStore";
+import { usePreferencesStore } from "../stores/preferencesStore";
 import type { Product, ProductVariant } from "../types/catalog";
 import type { Review } from "../types/engagement";
 import { formatMoney } from "../utils/currency";
@@ -15,6 +16,7 @@ import { formatMoney } from "../utils/currency";
 export function ProductPage() {
   const { slug } = useParams();
   const addItem = useCartStore((state) => state.addItem);
+  const displayCurrency = usePreferencesStore((state) => state.currency);
   const toggleFavorite = useFavoritesStore((state) => state.toggle);
   const hasFavorite = useFavoritesStore((state) => state.has);
   const [product, setProduct] = useState<Product | null>(null);
@@ -111,8 +113,8 @@ export function ProductPage() {
           <h1 className="mt-3 text-3xl font-semibold md:text-4xl">{product.name}</h1>
           <p className="mt-4 text-lg leading-8 text-slate-600">{product.short_description}</p>
           <div className="mt-6 flex items-end gap-3">
-            <p className="text-3xl font-semibold">{formatMoney(displayPrice, product.currency)}</p>
-            {compareAt ? <p className="pb-1 text-slate-500 line-through">{formatMoney(compareAt, product.currency)}</p> : null}
+            <p className="text-3xl font-semibold">{formatMoney(displayPrice, product.currency, displayCurrency)}</p>
+            {compareAt ? <p className="pb-1 text-slate-500 line-through">{formatMoney(compareAt, product.currency, displayCurrency)}</p> : null}
           </div>
 
           <div className="mt-8">

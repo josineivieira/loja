@@ -4,11 +4,14 @@ import { Link, Outlet } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
 
 import { useCartStore } from "../stores/cartStore";
+import { usePreferencesStore, type DisplayCurrency, type Language } from "../stores/preferencesStore";
+import { t } from "../utils/i18n";
 
 export function PublicLayout() {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const itemCount = useCartStore((state) => state.items.reduce((total, item) => total + item.quantity, 0));
+  const { language, currency, setLanguage, setCurrency } = usePreferencesStore();
 
   function submitSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -24,23 +27,23 @@ export function PublicLayout() {
             Nexora
           </Link>
           <nav className="hidden items-center gap-6 text-sm text-slate-600 md:flex">
-            <Link to="/catalog">Catalog</Link>
-            <Link to="/about">About</Link>
-            <Link to="/faq">FAQ</Link>
+            <Link to="/catalog">{t("catalog", language)}</Link>
+            <Link to="/about">{t("about", language)}</Link>
+            <Link to="/faq">{t("faq", language)}</Link>
           </nav>
           <form onSubmit={submitSearch} className="ml-auto hidden max-w-sm flex-1 items-center gap-2 rounded-md border border-slate-200 px-3 py-2 md:flex">
             <Search className="h-4 w-4 text-slate-500" />
-            <input className="w-full text-sm outline-none" placeholder="Search smart gadgets" value={query} onChange={(event) => setQuery(event.target.value)} />
+            <input className="w-full text-sm outline-none" placeholder={t("searchPlaceholder", language)} value={query} onChange={(event) => setQuery(event.target.value)} />
           </form>
-          <select className="rounded-md border border-slate-200 px-2 py-2 text-sm">
-            <option>EN</option>
-            <option>PT</option>
-            <option>ES</option>
+          <select className="rounded-md border border-slate-200 px-2 py-2 text-sm" value={language} onChange={(event) => setLanguage(event.target.value as Language)} aria-label="Language">
+            <option value="en">EN</option>
+            <option value="pt">PT</option>
+            <option value="es">ES</option>
           </select>
-          <select className="rounded-md border border-slate-200 px-2 py-2 text-sm">
-            <option>USD</option>
-            <option>EUR</option>
-            <option>BRL</option>
+          <select className="rounded-md border border-slate-200 px-2 py-2 text-sm" value={currency} onChange={(event) => setCurrency(event.target.value as DisplayCurrency)} aria-label="Currency">
+            <option value="USD">USD</option>
+            <option value="EUR">EUR</option>
+            <option value="BRL">BRL</option>
           </select>
           <Link aria-label="Account" to="/account" className="rounded-md p-2 hover:bg-mist">
             <UserRound className="h-5 w-5" />

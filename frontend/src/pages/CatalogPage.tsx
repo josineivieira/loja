@@ -5,7 +5,9 @@ import { useSearchParams } from "react-router-dom";
 import { ProductCard } from "../components/ProductCard";
 import { ProductSkeleton } from "../components/ProductSkeleton";
 import { listCategories, listProducts } from "../services/catalogService";
+import { usePreferencesStore } from "../stores/preferencesStore";
 import type { Category, Product, ProductFilters } from "../types/catalog";
+import { t } from "../utils/i18n";
 
 const sortOptions = [
   { value: "relevance", label: "Relevance" },
@@ -29,6 +31,7 @@ export function CatalogPage({ categorySlug, searchQuery, title = "Catalog" }: Ca
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  const language = usePreferencesStore((state) => state.language);
 
   const filters = useMemo<ProductFilters>(() => {
     const params: ProductFilters = {
@@ -71,13 +74,13 @@ export function CatalogPage({ categorySlug, searchQuery, title = "Catalog" }: Ca
     <section className="mx-auto max-w-7xl px-4 py-8">
       <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="text-3xl font-semibold">{title}</h1>
-          <p className="mt-2 text-sm text-slate-600">Filter international smart gadgets by category, price and availability.</p>
+          <h1 className="text-3xl font-semibold">{title === "Catalog" ? t("catalog", language) : title}</h1>
+          <p className="mt-2 text-sm text-slate-600">{language === "pt" ? "Filtre produtos por categoria, preco e disponibilidade." : language === "es" ? "Filtra productos por categoria, precio y disponibilidad." : "Filter products by category, price and availability."}</p>
         </div>
         <select className="h-10 rounded-md border border-slate-200 px-3 text-sm" value={filters.sort} onChange={(event) => updateFilter("sort", event.target.value)}>
           {sortOptions.map((option) => (
             <option key={option.value} value={option.value}>
-              {option.label}
+              {option.value === "relevance" ? t("relevance", language) : option.label}
             </option>
           ))}
         </select>
@@ -87,11 +90,11 @@ export function CatalogPage({ categorySlug, searchQuery, title = "Catalog" }: Ca
         <aside className="h-fit rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-4 flex items-center gap-2 font-semibold">
             <SlidersHorizontal className="h-4 w-4" />
-            Filters
+            {t("filters", language)}
           </div>
-          <label className="text-sm font-medium">Category</label>
+          <label className="text-sm font-medium">{t("category", language)}</label>
           <select className="mt-2 h-10 w-full rounded-md border border-slate-200 px-3 text-sm" value={filters.category ?? ""} onChange={(event) => updateFilter("category", event.target.value)}>
-            <option value="">All categories</option>
+            <option value="">{t("allCategories", language)}</option>
             {categories.map((category) => (
               <option key={category.id} value={category.slug}>
                 {category.name}
@@ -100,30 +103,30 @@ export function CatalogPage({ categorySlug, searchQuery, title = "Catalog" }: Ca
           </select>
           <div className="mt-5 grid grid-cols-2 gap-3">
             <label className="text-sm font-medium">
-              Min
+              {t("min", language)}
               <input className="mt-2 h-10 w-full rounded-md border border-slate-200 px-3 text-sm" inputMode="decimal" value={filters.min_price ?? ""} onChange={(event) => updateFilter("min_price", event.target.value)} />
             </label>
             <label className="text-sm font-medium">
-              Max
+              {t("max", language)}
               <input className="mt-2 h-10 w-full rounded-md border border-slate-200 px-3 text-sm" inputMode="decimal" value={filters.max_price ?? ""} onChange={(event) => updateFilter("max_price", event.target.value)} />
             </label>
           </div>
           <div className="mt-5 space-y-3 text-sm">
             <label className="flex items-center gap-2">
               <input type="checkbox" checked={filters.availability === "in_stock"} onChange={(event) => updateFilter("availability", event.target.checked ? "in_stock" : undefined)} />
-              In stock
+              {t("inStock", language)}
             </label>
             <label className="flex items-center gap-2">
               <input type="checkbox" checked={filters.on_sale === true} onChange={(event) => updateFilter("on_sale", event.target.checked)} />
-              Promotions
+              {t("promotions", language)}
             </label>
             <label className="flex items-center gap-2">
               <input type="checkbox" checked={filters.is_new === true} onChange={(event) => updateFilter("is_new", event.target.checked)} />
-              New arrivals
+              {t("newArrivals", language)}
             </label>
             <label className="flex items-center gap-2">
               <input type="checkbox" checked={filters.is_bestseller === true} onChange={(event) => updateFilter("is_bestseller", event.target.checked)} />
-              Best sellers
+              {t("bestSellers", language)}
             </label>
           </div>
         </aside>
@@ -137,7 +140,7 @@ export function CatalogPage({ categorySlug, searchQuery, title = "Catalog" }: Ca
               ))}
             </div>
           ) : products.length === 0 ? (
-            <div className="rounded-lg border border-slate-200 p-8 text-center text-slate-600">No products match these filters.</div>
+            <div className="rounded-lg border border-slate-200 p-8 text-center text-slate-600">{t("noProducts", language)}</div>
           ) : (
             <>
               <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
@@ -161,4 +164,3 @@ export function CatalogPage({ categorySlug, searchQuery, title = "Catalog" }: Ca
     </section>
   );
 }
-

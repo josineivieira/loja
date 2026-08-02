@@ -2,6 +2,7 @@ import { Heart, ShoppingBag } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { useCartStore } from "../stores/cartStore";
+import { usePreferencesStore } from "../stores/preferencesStore";
 import type { Product } from "../types/catalog";
 import { formatMoney } from "../utils/currency";
 
@@ -11,6 +12,7 @@ type ProductCardProps = {
 
 export function ProductCard({ product }: ProductCardProps) {
   const addItem = useCartStore((state) => state.addItem);
+  const displayCurrency = usePreferencesStore((state) => state.currency);
   const primaryVariant = product.variants[0];
   const primaryImage = product.images.find((image) => image.is_primary) ?? product.images[0];
   const salePrice = Number(product.sale_price);
@@ -54,8 +56,8 @@ export function ProductCard({ product }: ProductCardProps) {
       </Link>
       <div className="mt-4 flex items-center justify-between gap-3">
         <div>
-          <p className="font-semibold">{formatMoney(salePrice, product.currency)}</p>
-          {compareAtPrice ? <p className="text-xs text-slate-500 line-through">{formatMoney(compareAtPrice, product.currency)}</p> : null}
+          <p className="font-semibold">{formatMoney(salePrice, product.currency, displayCurrency)}</p>
+          {compareAtPrice ? <p className="text-xs text-slate-500 line-through">{formatMoney(compareAtPrice, product.currency, displayCurrency)}</p> : null}
         </div>
         <div className="flex gap-2">
           <button className="rounded-md border border-slate-200 p-2 hover:bg-mist" aria-label="Add to favorites">
@@ -69,4 +71,3 @@ export function ProductCard({ product }: ProductCardProps) {
     </article>
   );
 }
-

@@ -3,14 +3,15 @@ import { Link } from "react-router-dom";
 
 import { QuantityStepper } from "../components/QuantityStepper";
 import { useCartStore } from "../stores/cartStore";
+import { usePreferencesStore } from "../stores/preferencesStore";
 import { formatMoney } from "../utils/currency";
 
 export function CartPage() {
   const { items, updateQuantity, removeItem, clear } = useCartStore();
+  const displayCurrency = usePreferencesStore((state) => state.currency);
   const subtotal = items.reduce((total, item) => total + item.unitPrice * item.quantity, 0);
-  const estimatedShipping = subtotal >= 100 || subtotal === 0 ? 0 : 9.9;
   const discount = 0;
-  const total = subtotal + estimatedShipping - discount;
+  const total = subtotal - discount;
   const currency = items[0]?.currency ?? "USD";
 
   if (items.length === 0) {
@@ -51,7 +52,7 @@ export function CartPage() {
                   {item.name}
                 </Link>
                 <p className="mt-1 text-sm text-slate-600">{item.variantSku}</p>
-                <p className="mt-3 text-sm font-semibold">{formatMoney(item.unitPrice, item.currency)}</p>
+                <p className="mt-3 text-sm font-semibold">{formatMoney(item.unitPrice, item.currency, displayCurrency)}</p>
               </div>
               <div className="flex items-center gap-3 sm:flex-col sm:items-end">
                 <QuantityStepper value={item.quantity} onChange={(quantity) => updateQuantity(item.variantId, quantity)} />
@@ -68,20 +69,20 @@ export function CartPage() {
           <div className="mt-5 space-y-3 text-sm">
             <div className="flex justify-between">
               <span className="text-slate-600">Subtotal</span>
-              <span>{formatMoney(subtotal, currency)}</span>
+              <span>{formatMoney(subtotal, currency, displayCurrency)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-600">Discount</span>
-              <span>{formatMoney(discount, currency)}</span>
+              <span>{formatMoney(discount, currency, displayCurrency)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-600">Estimated shipping</span>
-              <span>{estimatedShipping === 0 ? "Free" : formatMoney(estimatedShipping, currency)}</span>
+              <span className="text-slate-600">Shipping</span>
+              <span>Calculated at checkout</span>
             </div>
             <div className="border-t border-slate-200 pt-3 text-base font-semibold">
               <div className="flex justify-between">
                 <span>Total</span>
-                <span>{formatMoney(total, currency)}</span>
+                <span>{formatMoney(total, currency, displayCurrency)}</span>
               </div>
             </div>
           </div>
@@ -94,4 +95,3 @@ export function CartPage() {
     </section>
   );
 }
-
