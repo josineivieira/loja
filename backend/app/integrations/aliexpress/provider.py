@@ -195,10 +195,8 @@ class AliExpressProvider:
             "aliexpress_ds_recommend_feed_get_response",
             "aliexpress_ds_product_get_response",
             "aliexpress_ds_product_simplequery_response",
-            "aliexpress_ds_product_get_response",
             "result",
             "resp_result",
-            "ae_item_base_info_dto",
         ):
             if isinstance(source, dict) and isinstance(source.get(key), (dict, list)):
                 source = source[key]
@@ -322,6 +320,9 @@ class AliExpressProvider:
         base = product.get("ae_item_base_info_dto")
         if isinstance(base, dict):
             flattened = {**base, **product}
+            images = product.get("ae_item_image_info_dtos")
+            if isinstance(images, dict):
+                flattened["ae_item_image_info_dtos"] = images.get("ae_item_image_info_d_t_o") or images.get("item") or images
             skus = product.get("ae_item_sku_info_dtos")
             if isinstance(skus, dict):
                 flattened["ae_item_sku_info_dtos"] = skus.get("ae_item_sku_info_d_t_o") or skus.get("item") or skus

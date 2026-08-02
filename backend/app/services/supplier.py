@@ -221,6 +221,11 @@ class SupplierService:
         variants = self._import_variants(payload)
         if not variants:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Selecione pelo menos uma variante AliExpress valida")
+        if not images and not description and all(variant.cost <= 0 for variant in variants):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="O AliExpress retornou apenas dados basicos desse item. Use o ID da pagina principal do produto ou escolha outro produto com detalhe liberado pela API.",
+            )
         product = Product(
             supplier_id=supplier.id,
             category_id=uuid.UUID(payload.category_id) if payload.category_id else None,

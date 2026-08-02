@@ -181,7 +181,10 @@ export function AdminProductsPage() {
     setError(null);
     setPreviewLoading(product.supplier_product_id);
     try {
-      const fullProduct = await (importProvider === "aliexpress" ? previewAliExpressProduct(product.supplier_product_id) : previewCjProduct(product.supplier_product_id)).catch(() => product);
+      const fullProduct =
+        importProvider === "aliexpress"
+          ? await previewAliExpressProduct(product.supplier_product_id)
+          : await previewCjProduct(product.supplier_product_id).catch(() => product);
       const displayNameSource = hasCjk(fullProduct.name) && !hasCjk(product.name) ? product.name : fullProduct.name;
       const displayDescriptionSource = fullProduct.description || product.description;
       const images = imageList(fullProduct);
@@ -216,6 +219,8 @@ export function AdminProductsPage() {
       setShippingError(null);
       setShippingCheckedVariants(0);
       setImportTab("product");
+    } catch (error) {
+      setError(apiErrorMessage(error, "O AliExpress retornou apenas dados basicos desse item. Tente o link/ID da pagina principal do produto, fora de ofertas ou combos."));
     } finally {
       setPreviewLoading(null);
     }
