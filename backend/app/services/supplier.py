@@ -1,5 +1,6 @@
 import re
 import uuid
+from html import unescape
 from decimal import Decimal
 from typing import Any
 
@@ -92,7 +93,7 @@ class SupplierService:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="CJ product is already imported")
         detail = self._cj_product_detail(payload.supplier_product_id)
         supplier = self._get_or_create_cj_supplier()
-        name = payload.name or str(self._pick(detail, "productName", "name", "title", "productTitle") or "CJ Product")
+        name = self._clean_title(payload.name or str(self._pick(detail, "productName", "name", "title", "productTitle") or "CJ Product"))
         description = self._clean_description(str(payload.description or self._pick(detail, "description", "productDescription", "descriptionEn", "productDescriptionEn") or ""))
         short_description = self._summary(description, name)
         images = list(dict.fromkeys([*(payload.images or []), *self._images(detail, payload.image_url)]))
@@ -330,7 +331,7 @@ class SupplierService:
 
     def _map_supplier_product(self, item: dict[str, Any]) -> SupplierProductRead:
         supplier_product_id = str(self._pick(item, "pid", "productId", "id", "supplierProductId") or "")
-        name = str(self._pick(item, "productName", "name", "title", "productTitle") or "CJ Product")
+        name = self._clean_title(str(self._pick(item, "productName", "name", "title", "productTitle") or "CJ Product"))
         image_url = self._first_image(self._pick(item, "productImage", "productImageSet", "image", "imageUrl", "productImages"))
         variants_raw = self._pick(item, "variants", "variantList", "variantsList", "productVariantList") or []
         variants = [self._map_supplier_variant(variant, name, image_url) for variant in variants_raw if isinstance(variant, dict)]
@@ -351,7 +352,7 @@ class SupplierService:
             supplier_product_id=supplier_product_id,
             name=name,
             sku=str(self._pick(item, "productSku", "sku", "productNum") or f"CJ-{supplier_product_id}"),
-            description=self._pick(item, "description", "productDescription"),
+            description=self._clean_description(str(self._pick(item, "description", "productDescription") or "")),
             image_url=image_url,
             images=self._images(item, image_url),
             variants=variants,
@@ -428,9 +429,19 @@ class SupplierService:
         return list(dict.fromkeys(images))
 
     def _clean_description(self, value: str) -> str:
-        cleaned = re.sub(r"<[^>]+>", " ", value)
+        cleaned = unescape(value)
+        cleaned = re.sub(r"<[^>]+>", " ", cleaned)
         cleaned = re.sub(r"\s+", " ", cleaned).strip()
         return cleaned[:5000]
+
+    def _clean_title(self, value: str) -> str:
+        cleaned = unescape(value).strip()
+        quoted = re.findall(r'"([^"]{3,})"', cleaned)
+        if quoted:
+            cleaned = quoted[0]
+        cleaned = cleaned.strip("[]'\" ")
+        cleaned = re.sub(r"\s+", " ", cleaned)
+        return cleaned[:180] or "CJ Product"
 
     def _summary(self, description: str, fallback: str) -> str:
         if description:

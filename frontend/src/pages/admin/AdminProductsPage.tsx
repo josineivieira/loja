@@ -13,6 +13,8 @@ import {
 } from "../../services/adminService";
 import type { Product, SupplierProduct, SupplierShippingEstimate } from "../../types/catalog";
 import { formatMoney } from "../../utils/currency";
+import { presentSupplierDescription, presentSupplierName } from "../../utils/productPresentation";
+import { usePreferencesStore } from "../../stores/preferencesStore";
 
 type ImportTab = "product" | "variants" | "media" | "description" | "shipping";
 
@@ -45,6 +47,7 @@ function imageList(product: SupplierProduct) {
 }
 
 export function AdminProductsPage() {
+  const language = usePreferencesStore((state) => state.language);
   const [products, setProducts] = useState<Product[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [showCjImport, setShowCjImport] = useState(false);
@@ -113,6 +116,8 @@ export function AdminProductsPage() {
     try {
       const fullProduct = await previewCjProduct(product.supplier_product_id).catch(() => product);
       const images = imageList(fullProduct);
+      const cleanName = presentSupplierName(fullProduct.name, fullProduct.description, language);
+      const cleanDescription = presentSupplierDescription(fullProduct.name, fullProduct.description, language);
       const variants = fullProduct.variants
         .filter((variant) => variant.supplier_variant_id)
         .slice(0, 40)
@@ -121,7 +126,7 @@ export function AdminProductsPage() {
           return {
             supplier_variant_id: variant.supplier_variant_id,
             sku: variant.sku || `${fullProduct.sku}-${index + 1}`,
-            name: variant.name || fullProduct.name,
+            name: variant.name || cleanName,
             sale_price: suggestedPrice(cost),
             cost_price: cost,
             stock: String(variant.stock ?? 0),
@@ -131,9 +136,9 @@ export function AdminProductsPage() {
         });
       setPreview(fullProduct);
       setDraft({
-        name: fullProduct.name,
+        name: cleanName,
         sku: fullProduct.sku || variants[0]?.sku || fullProduct.supplier_product_id,
-        description: fullProduct.description ?? "",
+        description: cleanDescription,
         images,
         variants,
       });
@@ -284,7 +289,7 @@ export function AdminProductsPage() {
                     {product.image_url ? <img src={product.image_url} alt={product.name} className="h-full w-full object-cover" /> : null}
                   </div>
                   <div>
-                    <h3 className="font-semibold">{product.name}</h3>
+                    <h3 className="font-semibold">{presentSupplierName(product.name, product.description, language)}</h3>
                     <p className="mt-1 text-sm text-slate-600">ID CJ: {product.supplier_product_id}</p>
                     <p className="mt-1 text-sm text-slate-600">Primeira variante: {variant?.supplier_variant_id || "sem ID"} - {variant?.sku}</p>
                     <p className="mt-1 text-sm text-slate-600">Custo CJ: USD {variant?.cost ?? "0"} - Estoque {variant?.stock ?? 0}</p>

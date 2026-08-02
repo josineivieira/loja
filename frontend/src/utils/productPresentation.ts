@@ -19,6 +19,106 @@ const genericDescription: Record<Language, string> = {
   es: "Producto importado del catalogo del proveedor y preparado para compra segura con calculo real de entrega por destino.",
 };
 
+const titleRules: Array<{ match: RegExp; title: Record<Language, string> }> = [
+  { match: /notched v-neck|loose midi tunic|decorative wooden buttons/i, title: clothingTitle },
+  {
+    match: /seat\s*belt|safety\s*belt|belt\s*adjuster/i,
+    title: {
+      en: "Seat belt comfort adjuster",
+      pt: "Ajustador de conforto para cinto de seguranca",
+      es: "Ajustador de comodidad para cinturon de seguridad",
+    },
+  },
+  {
+    match: /portable car vacuum|car vacuum|mini vacuum|handheld vacuum/i,
+    title: {
+      en: "Portable car vacuum cleaner",
+      pt: "Aspirador portatil para carro",
+      es: "Aspiradora portatil para auto",
+    },
+  },
+  {
+    match: /wireless charger|charging pad|magnetic charger/i,
+    title: {
+      en: "Wireless charging base",
+      pt: "Base de carregamento sem fio",
+      es: "Base de carga inalambrica",
+    },
+  },
+  {
+    match: /neck fan|leafless fan|usb fan/i,
+    title: {
+      en: "Portable neck fan",
+      pt: "Ventilador portatil de pescoco",
+      es: "Ventilador portatil de cuello",
+    },
+  },
+  {
+    match: /mosquito|repellent/i,
+    title: {
+      en: "Portable mosquito repellent bracelet",
+      pt: "Pulseira repelente de mosquitos",
+      es: "Pulsera repelente de mosquitos",
+    },
+  },
+];
+
+const descriptionRules: Array<{ match: RegExp; description: Record<Language, string> }> = [
+  { match: /notched v-neck|loose midi tunic|decorative wooden buttons/i, description: clothingDescription },
+  {
+    match: /seat\s*belt|safety\s*belt|belt\s*adjuster/i,
+    description: {
+      en: "Compact accessory designed to reduce seat belt pressure around the neck and shoulder. Easy to attach, practical for daily driving and useful for improving comfort on longer trips.",
+      pt: "Acessorio compacto para reduzir a pressao do cinto no pescoco e no ombro. Facil de encaixar, pratico para o dia a dia e util para deixar viagens mais confortaveis.",
+      es: "Accesorio compacto para reducir la presion del cinturon en el cuello y el hombro. Facil de instalar, practico para uso diario y util para viajes mas comodos.",
+    },
+  },
+  {
+    match: /portable car vacuum|car vacuum|mini vacuum|handheld vacuum/i,
+    description: {
+      en: "Compact vacuum cleaner for keeping the car interior clean. Useful for dust, crumbs and small debris, with portable handling for quick everyday cleaning.",
+      pt: "Aspirador compacto para manter o interior do carro limpo. Ideal para poeira, migalhas e pequenos residuos, com uso portatil para limpezas rapidas no dia a dia.",
+      es: "Aspiradora compacta para mantener limpio el interior del auto. Util para polvo, migas y pequenos residuos, con manejo portatil para limpiezas rapidas.",
+    },
+  },
+  {
+    match: /wireless charger|charging pad|magnetic charger/i,
+    description: {
+      en: "Practical wireless charging accessory for compatible devices. Keeps your setup cleaner and makes everyday charging easier at home, work or travel.",
+      pt: "Acessorio pratico de carregamento sem fio para dispositivos compativeis. Deixa o ambiente mais organizado e facilita a recarga em casa, no trabalho ou em viagens.",
+      es: "Accesorio practico de carga inalambrica para dispositivos compatibles. Mantiene el espacio mas ordenado y facilita la carga diaria.",
+    },
+  },
+  {
+    match: /neck fan|leafless fan|usb fan/i,
+    description: {
+      en: "Portable neck fan with hands-free design for warm days, commuting and outdoor use. Lightweight, rechargeable and practical for personal cooling.",
+      pt: "Ventilador portatil de pescoco com uso sem as maos para dias quentes, deslocamentos e areas externas. Leve, recarregavel e pratico para refrescar no dia a dia.",
+      es: "Ventilador portatil de cuello con diseno manos libres para dias calidos, traslados y uso exterior. Ligero, recargable y practico.",
+    },
+  },
+];
+
+const phraseTranslations: Record<Language, Array<[RegExp, string]>> = {
+  en: [],
+  pt: [
+    [/product highlights/gi, "Destaques do produto"],
+    [/relieve neck (&amp;|&) shoulder chafing/gi, "Reduz atrito no pescoco e no ombro"],
+    [/effectively adjusts the angle of the seat belt/gi, "Ajusta o angulo do cinto de seguranca"],
+    [/prevent edges from cutting into the neck or rubbing against clothes/gi, "evitando contato incomodo no pescoco ou atrito com a roupa"],
+    [/significantly enhancing long-distance driving comfort/gi, "melhorando o conforto em viagens longas"],
+    [/control seat belt tension freely/gi, "Controle livre da tensao do cinto"],
+    [/tool-free (&amp;|&) instant installation/gi, "Instalacao rapida sem ferramentas"],
+    [/features a simple clip-on or slider design/gi, "possui encaixe simples por clipe ou ajuste deslizante"],
+    [/imported from cj.*$/gi, ""],
+  ],
+  es: [
+    [/product highlights/gi, "Destacados del producto"],
+    [/relieve neck (&amp;|&) shoulder chafing/gi, "Reduce el roce en cuello y hombro"],
+    [/imported from cj.*$/gi, ""],
+  ],
+};
+
 function quotedParts(value: string) {
   const matches = Array.from(value.matchAll(/"([^"]{3,})"/g)).map((match) => match[1].trim());
   return Array.from(new Set(matches));
@@ -29,24 +129,41 @@ export function cleanSupplierText(value?: string | null) {
   const parts = quotedParts(value);
   if (parts.length) return parts[0];
   return value
+    .replace(/&amp;/g, "&")
+    .replace(/&nbsp;/g, " ")
     .replace(/^\[|\]$/g, "")
     .replace(/"/g, "")
     .replace(/\s+/g, " ")
     .trim();
 }
 
+export function presentSupplierName(name?: string | null, description?: string | null, language: Language = "pt") {
+  const source = `${name ?? ""} ${description ?? ""}`;
+  const rule = titleRules.find((item) => item.match.test(source));
+  if (rule) return rule.title[language];
+  const cleaned = cleanSupplierText(name);
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+}
+
+export function presentSupplierDescription(name?: string | null, description?: string | null, language: Language = "pt") {
+  const source = `${name ?? ""} ${description ?? ""}`;
+  const rule = descriptionRules.find((item) => item.match.test(source));
+  if (rule) return rule.description[language];
+  let cleaned = cleanSupplierText(description);
+  for (const [pattern, replacement] of phraseTranslations[language]) {
+    cleaned = cleaned.replace(pattern, replacement);
+  }
+  cleaned = cleaned.replace(/\s+/g, " ").trim();
+  if (!cleaned || cleaned.toLowerCase().includes("imported from cj")) return genericDescription[language];
+  return cleaned;
+}
+
 export function productDisplayName(product: Product, language: Language) {
-  const source = `${product.name} ${product.short_description ?? ""}`.toLowerCase();
-  if (source.includes("notched v-neck") || source.includes("loose midi tunic")) return clothingTitle[language];
-  return cleanSupplierText(product.name) || product.name;
+  return presentSupplierName(product.name, product.short_description || product.description, language) || product.name;
 }
 
 export function productDisplayDescription(product: Product, language: Language) {
-  const source = `${product.name} ${product.short_description ?? ""} ${product.description ?? ""}`.toLowerCase();
-  if (source.includes("notched v-neck") || source.includes("loose midi tunic")) return clothingDescription[language];
-  const cleaned = cleanSupplierText(product.short_description || product.description);
-  if (!cleaned || cleaned.toLowerCase().includes("imported from cj")) return genericDescription[language];
-  return cleaned;
+  return presentSupplierDescription(product.name, product.short_description || product.description, language);
 }
 
 export function variantDisplayName(index: number, language: Language) {
