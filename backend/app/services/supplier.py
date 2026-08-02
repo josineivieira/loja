@@ -137,7 +137,7 @@ class SupplierService:
             )
             self.repo.db.add(variant)
             self.repo.db.flush()
-            self._attach_variant_options(product, variant, variant_data.name or variant_data.sku, index, option_cache)
+            self._attach_variant_options(product, variant, variant_data.name or variant_data.sku, description, index, option_cache)
             if index == 0:
                 product.sale_price = variant_data.price
                 product.cost_price = variant_data.cost
@@ -467,10 +467,11 @@ class SupplierService:
         product: Product,
         variant: ProductVariant,
         raw_name: str,
+        product_description: str,
         index: int,
         option_cache: dict[tuple[str, str], ProductOptionValue],
     ) -> None:
-        parsed = self._parse_variant_options(raw_name, index)
+        parsed = self._parse_variant_options(raw_name, product_description, index)
         for option_name, label in parsed.items():
             key = (option_name, label.lower())
             option_value = option_cache.get(key)
@@ -493,7 +494,7 @@ class SupplierService:
                 option_cache[key] = option_value
             self.repo.db.add(VariantOptionValue(variant_id=variant.id, option_value_id=option_value.id))
 
-    def _parse_variant_options(self, raw_name: str, index: int) -> dict[str, str]:
+    def _parse_variant_options(self, raw_name: str, product_description: str, index: int) -> dict[str, str]:
         value = unescape(raw_name or "")
         tokens = [item.strip() for item in re.split(r"[,/|;:_-]+", value) if item.strip()]
         colors = {
@@ -521,6 +522,16 @@ class SupplierService:
                 parsed["color"] = colors[normalized]
             elif normalized in sizes or re.fullmatch(r"\d{2,3}", normalized):
                 parsed["size"] = token.upper()
+        if "size" not in parsed:
+            size_match = re.search(r"size(?:\s*information)?\s*:?\s*([XSML0-9,\s/-]{1,40})", product_description, flags=re.IGNORECASE)
+            if size_match:
+                available_sizes = [
+                    item.strip().upper()
+                    for item in re.split(r"[,/\s]+", size_match.group(1))
+                    if re.fullmatch(r"XXS|XS|S|M|L|XL|XXL|XXXL|2XL|3XL|4XL|5XL|\d{2,3}", item.strip().upper())
+                ]
+                if available_sizes:
+                    parsed["size"] = available_sizes[index % len(available_sizes)]
         if not parsed and tokens and not raw_name.upper().startswith("CJ"):
             parsed["option"] = tokens[-1][:40]
         if not parsed:

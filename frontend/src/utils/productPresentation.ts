@@ -22,6 +22,14 @@ const genericDescription: Record<Language, string> = {
 const titleRules: Array<{ match: RegExp; title: Record<Language, string> }> = [
   { match: /notched v-neck|loose midi tunic|decorative wooden buttons/i, title: clothingTitle },
   {
+    match: /sleeveless mini skirt|black sleeveless|迷你裙|礼服|vestido/i,
+    title: {
+      en: "Black sleeveless mini dress",
+      pt: "Vestido curto preto sem mangas",
+      es: "Vestido corto negro sin mangas",
+    },
+  },
+  {
     match: /seat\s*belt|safety\s*belt|belt\s*adjuster/i,
     title: {
       en: "Seat belt comfort adjuster",
@@ -65,6 +73,14 @@ const titleRules: Array<{ match: RegExp; title: Record<Language, string> }> = [
 
 const descriptionRules: Array<{ match: RegExp; description: Record<Language, string> }> = [
   { match: /notched v-neck|loose midi tunic|decorative wooden buttons/i, description: clothingDescription },
+  {
+    match: /sleeveless mini skirt|black sleeveless|迷你裙|礼服|vestido/i,
+    description: {
+      en: "Elegant black sleeveless mini dress with a fitted silhouette for parties, dinners and evening looks. Check the size guide before ordering; Asian sizes can run smaller than US/EU sizes.",
+      pt: "Vestido curto preto sem mangas, com modelagem ajustada para festas, jantares e looks noturnos. Confira o tamanho antes de comprar; tamanhos asiaticos podem vestir menor que os padroes BR/EUA/Europa.",
+      es: "Vestido corto negro sin mangas, con silueta ajustada para fiestas, cenas y looks de noche. Revisa la talla antes de comprar; las tallas asiaticas pueden ser mas pequenas.",
+    },
+  },
   {
     match: /seat\s*belt|safety\s*belt|belt\s*adjuster/i,
     description: {
@@ -173,7 +189,7 @@ export function variantDisplayName(index: number, language: Language) {
 }
 
 export function variantOptionSummary(product: Product, variant: ProductVariant, index: number, language: Language) {
-  const options = variant.selected_options ?? {};
+  const options = variantDisplayOptions(product, variant, index, language);
   const entries = Object.entries(options).filter(([, value]) => value);
   if (entries.length) {
     return {
@@ -193,4 +209,38 @@ export function variantOptionSummary(product: Product, variant: ProductVariant, 
       ? `${language === "pt" ? "Tamanho/variante" : language === "es" ? "Talla/variante" : "Size/variant"} ${sameImageBefore || index + 1}`
       : variant.sku;
   return { title, detail };
+}
+
+export function variantDisplayOptions(product: Product, variant: ProductVariant, index: number, language: Language) {
+  const saved = variant.selected_options ?? {};
+  if (Object.keys(saved).length) return saved;
+
+  const source = `${product.name} ${product.short_description ?? ""} ${product.description ?? ""} ${variant.sku} ${variant.image_url ?? ""}`;
+  const sourceLower = source.toLowerCase();
+  const labels = {
+    color: language === "pt" ? "Cor" : language === "es" ? "Color" : "Color",
+    size: language === "pt" ? "Tamanho" : language === "es" ? "Talla" : "Size",
+  };
+  const options: Record<string, string> = {};
+  const colorRules: Array<[RegExp, string]> = [
+    [/black|preto|negro/i, language === "pt" ? "Preto" : language === "es" ? "Negro" : "Black"],
+    [/white|branco|blanco/i, language === "pt" ? "Branco" : language === "es" ? "Blanco" : "White"],
+    [/beige|cream|khaki|caqui/i, language === "pt" ? "Bege" : language === "es" ? "Beige" : "Beige"],
+    [/red|wine|vermelho|vino/i, language === "pt" ? "Vermelho" : language === "es" ? "Rojo" : "Red"],
+    [/blue|azul/i, language === "pt" ? "Azul" : language === "es" ? "Azul" : "Blue"],
+    [/green|verde/i, language === "pt" ? "Verde" : language === "es" ? "Verde" : "Green"],
+    [/pink|rosa/i, language === "pt" ? "Rosa" : language === "es" ? "Rosa" : "Pink"],
+    [/yellow|amarelo|amarillo/i, language === "pt" ? "Amarelo" : language === "es" ? "Amarillo" : "Yellow"],
+    [/orange|laranja|naranja/i, language === "pt" ? "Laranja" : language === "es" ? "Naranja" : "Orange"],
+  ];
+  const color = colorRules.find(([pattern]) => pattern.test(sourceLower))?.[1];
+  if (color) options[labels.color] = color;
+
+  const sizeMatch = source.match(/size(?:\s*information)?\s*:?\s*([XSML0-9,\s/-]{1,40})/i);
+  const sizes = sizeMatch?.[1]
+    ?.split(/[,/ ]+/)
+    .map((item) => item.trim().toUpperCase())
+    .filter((item) => /^(XXS|XS|S|M|L|XL|XXL|XXXL|2XL|3XL|4XL|5XL|\d{2,3})$/.test(item));
+  if (sizes?.length) options[labels.size] = sizes[index % sizes.length];
+  return options;
 }

@@ -15,7 +15,7 @@ import type { ShippingQuote } from "../types/checkout";
 import type { Review } from "../types/engagement";
 import { formatMoney } from "../utils/currency";
 import { t } from "../utils/i18n";
-import { productDisplayDescription, productDisplayName, variantOptionSummary } from "../utils/productPresentation";
+import { productDisplayDescription, productDisplayName, variantDisplayOptions, variantOptionSummary } from "../utils/productPresentation";
 
 export function ProductPage() {
   const { slug } = useParams();
@@ -59,6 +59,17 @@ export function ProductPage() {
   const displayName = product ? productDisplayName(product, language) : "";
   const displayDescription = product ? productDisplayDescription(product, language) : "";
   const visibleVariants = product ? (showAllVariants ? product.variants : product.variants.slice(0, 8)) : [];
+  const optionGroups = useMemo(() => {
+    if (!product) return [];
+    const groups = new Map<string, string[]>();
+    product.variants.forEach((variant, index) => {
+      Object.entries(variantDisplayOptions(product, variant, index, language)).forEach(([name, value]) => {
+        if (!value) return;
+        groups.set(name, Array.from(new Set([...(groups.get(name) ?? []), value])));
+      });
+    });
+    return Array.from(groups.entries()).filter(([, values]) => values.length > 0);
+  }, [language, product]);
 
   function handleAddToCart() {
     if (!product || !selectedVariant) return;
@@ -90,6 +101,18 @@ export function ProductPage() {
   function selectVariant(variant: ProductVariant) {
     setSelectedVariant(variant);
     if (variant.image_url) setActiveImage(variant.image_url);
+  }
+
+  function selectOption(optionName: string, optionValue: string) {
+    if (!product || !selectedVariant) return;
+    const selectedIndex = product.variants.indexOf(selectedVariant);
+    const currentOptions = variantDisplayOptions(product, selectedVariant, Math.max(0, selectedIndex), language);
+    const desired = { ...currentOptions, [optionName]: optionValue };
+    const match = product.variants.find((variant, index) => {
+      const options = variantDisplayOptions(product, variant, index, language);
+      return Object.entries(desired).every(([name, value]) => !value || options[name] === value);
+    });
+    if (match) selectVariant(match);
   }
 
   useEffect(() => {
@@ -208,11 +231,48 @@ export function ProductPage() {
               <p className="text-sm font-semibold">{t("model", language)}</p>
               {product.variants.length > 8 ? (
                 <button className="text-sm font-semibold text-primary" onClick={() => setShowAllVariants((value) => !value)}>
-                  {showAllVariants ? (language === "pt" ? "Ver menos" : language === "es" ? "Ver menos" : "Show less") : `${language === "pt" ? "Ver todas" : language === "es" ? "Ver todas" : "Show all"} (${product.variants.length})`}
+                  {showAllVariants
+                    ? (language === "pt" ? "Ver menos" : language === "es" ? "Ver menos" : "Show less")
+                    : `${optionGroups.length ? (language === "pt" ? "Ver combinacoes" : language === "es" ? "Ver combinaciones" : "Show combinations") : language === "pt" ? "Ver todas" : language === "es" ? "Ver todas" : "Show all"} (${product.variants.length})`}
                 </button>
               ) : null}
             </div>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {optionGroups.length ? (
+              <div className="mt-3 space-y-4">
+                {optionGroups.map(([name, values]) => {
+                  const selectedIndex = selectedVariant ? product.variants.indexOf(selectedVariant) : 0;
+                  const selectedOptions = selectedVariant ? variantDisplayOptions(product, selectedVariant, Math.max(0, selectedIndex), language) : {};
+                  return (
+                    <div key={name}>
+                      <p className="text-sm font-semibold">{name}</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {values.map((value) => {
+                          const active = selectedOptions[name] === value;
+                          return (
+                            <button
+                              key={value}
+                              type="button"
+                              className={`min-w-14 rounded-md border px-4 py-2 text-sm font-semibold ${active ? "border-primary bg-blue-50 text-primary" : "border-slate-200 hover:bg-mist"}`}
+                              onClick={() => selectOption(name, value)}
+                            >
+                              {value}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+                {selectedVariant ? (
+                  <div className="rounded-md bg-mist p-3 text-sm text-slate-600">
+                    <span className="font-semibold text-ink">{language === "pt" ? "Selecionado" : language === "es" ? "Seleccionado" : "Selected"}:</span>{" "}
+                    {variantOptionSummary(product, selectedVariant, Math.max(0, product.variants.indexOf(selectedVariant)), language).title}
+                    <span className="ml-2 text-xs">{selectedVariant.sku}</span>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+            {!optionGroups.length || showAllVariants ? <div className="mt-3 grid gap-3 sm:grid-cols-2">
               {visibleVariants.map((variant) => {
                 const option = variantOptionSummary(product, variant, product.variants.indexOf(variant), language);
                 return (
@@ -230,7 +290,7 @@ export function ProductPage() {
                   </button>
                 );
               })}
-            </div>
+            </div> : null}
             {product.variants.some((variant) => !variant.selected_options || Object.keys(variant.selected_options).length === 0) ? (
               <p className="mt-3 text-xs leading-5 text-slate-500">
                 {language === "pt"
