@@ -25,8 +25,14 @@ class Settings(BaseSettings):
     email_from: str = "no-reply@nexora.local"
     admin_email: str = "admin@nexora.local"
     admin_password: str = Field(default="", repr=False)
+    supplier_provider: str = "manual"
     cj_api_key: str = ""
     cj_api_secret: str = Field(default="", repr=False)
+    cj_base_url: str = "https://developers.cjdropshipping.com"
+    cj_platform_token: str = Field(default="", repr=False)
+    cj_sandbox: bool = False
+    cj_default_logistic_name: str = "CJPacket"
+    cj_default_from_country: str = "CN"
 
     @field_validator("database_url")
     @classmethod

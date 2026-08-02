@@ -20,11 +20,13 @@ from app.schemas.admin import (
 )
 from app.schemas.category import CategoryCreate, CategoryRead, CategoryUpdate
 from app.schemas.checkout import OrderRead
+from app.schemas.integrations import IntegrationStatusRead
 from app.schemas.product import ProductCreate, ProductRead, ProductUpdate
 from app.schemas.supplier import SupplierOrderPayloadRead, SupplierSubmissionUpdate, SupplierTrackingUpdate
 from app.services.admin import AdminService
 from app.services.catalog import CatalogService
 from app.services.supplier import SupplierService
+from app.core.config import settings
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 AdminUser = Annotated[User, Depends(require_roles("admin", "manager"))]
@@ -37,6 +39,20 @@ def customer_to_read(user: User) -> AdminCustomerRead:
 @router.get("/dashboard", response_model=AdminDashboardRead)
 def dashboard(_: AdminUser, db: Annotated[Session, Depends(get_db)]) -> AdminDashboardRead:
     return AdminService(db).dashboard()
+
+
+@router.get("/integrations/status", response_model=IntegrationStatusRead)
+def integration_status(_: AdminUser) -> IntegrationStatusRead:
+    return IntegrationStatusRead(
+        stripe_secret_configured=bool(settings.stripe_secret_key),
+        stripe_webhook_configured=bool(settings.stripe_webhook_secret),
+        supplier_provider=settings.supplier_provider,
+        cj_configured=bool(settings.cj_api_key or settings.cj_platform_token),
+        cj_sandbox=settings.cj_sandbox,
+        email_provider=settings.email_provider or "log",
+        email_configured=bool(settings.email_api_key),
+        frontend_url=str(settings.frontend_url),
+    )
 
 
 @router.post("/categories", response_model=CategoryRead, status_code=201)

@@ -1,6 +1,6 @@
 import { api } from "./api";
 import { demoAdmin } from "../data/demoAdmin";
-import type { AdminCustomer, AdminDashboard, Coupon, ShippingMethod, SupplierOrderPayload } from "../types/admin";
+import type { AdminCustomer, AdminDashboard, Coupon, IntegrationStatus, ShippingMethod, SupplierOrderPayload } from "../types/admin";
 import type { Order } from "../types/checkout";
 import type { Product } from "../types/catalog";
 
@@ -17,6 +17,22 @@ async function withFallback<T>(request: () => Promise<T>, fallback: T) {
 
 export function getAdminDashboard() {
   return withFallback(async () => (await api.get<AdminDashboard>("/admin/dashboard")).data, demoAdmin.dashboard);
+}
+
+export function getIntegrationStatus() {
+  return withFallback(
+    async () => (await api.get<IntegrationStatus>("/admin/integrations/status")).data,
+    {
+      stripe_secret_configured: false,
+      stripe_webhook_configured: false,
+      supplier_provider: "manual",
+      cj_configured: false,
+      cj_sandbox: false,
+      email_provider: "log",
+      email_configured: false,
+      frontend_url: window.location.origin,
+    },
+  );
 }
 
 export function listAdminProducts() {

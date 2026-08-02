@@ -43,6 +43,18 @@ services:
         value: log
       - key: EMAIL_FROM
         value: no-reply@nexora.local
+      - key: SUPPLIER_PROVIDER
+        value: manual
+      - key: CJ_API_KEY
+        sync: false
+      - key: CJ_PLATFORM_TOKEN
+        sync: false
+      - key: CJ_SANDBOX
+        value: false
+      - key: CJ_DEFAULT_LOGISTIC_NAME
+        value: CJPacket
+      - key: CJ_DEFAULT_FROM_COUNTRY
+        value: CN
 
   - type: web
     name: nexora-frontend

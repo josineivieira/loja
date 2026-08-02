@@ -2,8 +2,8 @@ import { Clipboard, PackageCheck, Truck } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { AdminTable } from "../../components/AdminTable";
-import { addSupplierTracking, getSupplierPayload, listSupplierOrders, markSupplierSubmitted } from "../../services/adminService";
-import type { SupplierOrderPayload } from "../../types/admin";
+import { addSupplierTracking, getIntegrationStatus, getSupplierPayload, listSupplierOrders, markSupplierSubmitted } from "../../services/adminService";
+import type { IntegrationStatus, SupplierOrderPayload } from "../../types/admin";
 import type { Order } from "../../types/checkout";
 import { PageTitle, Status } from "./AdminProductsPage";
 
@@ -14,9 +14,11 @@ export function AdminIntegrationsPage() {
   const [supplierCost, setSupplierCost] = useState("");
   const [trackingNumber, setTrackingNumber] = useState("");
   const [carrier, setCarrier] = useState("CJPacket");
+  const [status, setStatus] = useState<IntegrationStatus | null>(null);
 
   useEffect(() => {
     listSupplierOrders().then(setOrders);
+    getIntegrationStatus().then(setStatus);
   }, []);
 
   async function loadPayload(orderNumber: string) {
@@ -49,6 +51,14 @@ export function AdminIntegrationsPage() {
             </div>
           </div>
         </section>
+        {status ? (
+          <section className="mb-5 grid gap-3 md:grid-cols-4">
+            <IntegrationCard label="Stripe secret" active={status.stripe_secret_configured} />
+            <IntegrationCard label="Stripe webhook" active={status.stripe_webhook_configured} />
+            <IntegrationCard label={`Supplier: ${status.supplier_provider}`} active={status.supplier_provider === "cj" ? status.cj_configured : true} />
+            <IntegrationCard label={`Email: ${status.email_provider}`} active={status.email_provider === "log" || status.email_configured} />
+          </section>
+        ) : null}
         <AdminTable columns={["Order", "Customer", "Total", "Supplier", "Action"]}>
           {orders.map((order) => (
             <tr key={order.id}>
@@ -123,3 +133,11 @@ export function AdminIntegrationsPage() {
   );
 }
 
+function IntegrationCard({ label, active }: { label: string; active: boolean }) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <p className="text-sm font-semibold">{label}</p>
+      <p className={`mt-2 text-xs font-semibold ${active ? "text-emerald-600" : "text-danger"}`}>{active ? "Configured" : "Missing setup"}</p>
+    </div>
+  );
+}

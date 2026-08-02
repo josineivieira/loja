@@ -83,3 +83,14 @@ export type SupplierOrderPayload = {
   supplier_real_cost?: string | null;
   copyable_payload: Record<string, unknown>;
 };
+
+export type IntegrationStatus = {
+  stripe_secret_configured: boolean;
+  stripe_webhook_configured: boolean;
+  supplier_provider: string;
+  cj_configured: boolean;
+  cj_sandbox: boolean;
+  email_provider: string;
+  email_configured: boolean;
+  frontend_url: string;
+};

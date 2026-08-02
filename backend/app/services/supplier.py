@@ -3,6 +3,9 @@ from decimal import Decimal
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
+from app.integrations.cj_dropshipping.cj_provider import CJDropshippingProvider
+from app.integrations.cj_dropshipping.exceptions import CJDropshippingError
 from app.integrations.cj_dropshipping.manual_provider import ManualSupplierProvider
 from app.models.order import Order
 from app.repositories.supplier import SupplierRepository
@@ -12,7 +15,7 @@ from app.schemas.supplier import SupplierOrderItemRead, SupplierOrderPayloadRead
 class SupplierService:
     def __init__(self, db: Session):
         self.repo = SupplierRepository(db)
-        self.provider = ManualSupplierProvider()
+        self.provider = CJDropshippingProvider() if settings.supplier_provider.lower() == "cj" else ManualSupplierProvider()
 
     def list_pending(self) -> list[Order]:
         return self.repo.list_pending_orders()
@@ -53,8 +56,16 @@ class SupplierService:
             "shippingMethod": order.shipping_method_code,
             "notes": order.notes,
         }
-        provider_result = self.provider.create_supplier_order(copyable_payload)
+        try:
+            provider_result = self.provider.create_supplier_order(copyable_payload)
+        except CJDropshippingError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
         order.supplier_payload = provider_result["copyable_payload"]
+        if provider_result.get("supplier_order_id"):
+            order.supplier_order_id = provider_result["supplier_order_id"]
+            order.supplier_status = provider_result.get("supplier_status", "supplier_confirmed")
+            order.fulfillment_status = "supplier_confirmed"
+            self.repo.add_history(order, order.supplier_status, "Supplier order submitted through CJ API")
         self.repo.commit()
         return SupplierOrderPayloadRead(
             order_number=order.order_number,
@@ -113,4 +124,3 @@ class SupplierService:
             "district": address.district,
             "postalCode": address.postal_code,
         }
-
