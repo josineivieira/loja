@@ -20,7 +20,7 @@ from app.schemas.admin import (
 )
 from app.schemas.category import CategoryCreate, CategoryRead, CategoryUpdate
 from app.schemas.checkout import OrderRead
-from app.schemas.integrations import IntegrationStatusRead
+from app.schemas.integrations import AliExpressAuthUrlRead, AliExpressOAuthCallbackRead, IntegrationStatusRead
 from app.schemas.product import ProductCreate, ProductRead, ProductUpdate
 from app.schemas.supplier import (
     SupplierOrderPayloadRead,
@@ -62,6 +62,31 @@ def integration_status(_: AdminUser) -> IntegrationStatusRead:
         email_provider=settings.email_provider or "log",
         email_configured=bool(settings.email_api_key),
         frontend_url=str(settings.frontend_url),
+    )
+
+
+@router.get("/aliexpress/oauth/url", response_model=AliExpressAuthUrlRead)
+def aliexpress_oauth_url(_: AdminUser) -> AliExpressAuthUrlRead:
+    callback_url = f"{str(settings.frontend_url).rstrip('/')}/api/admin/aliexpress/oauth/callback"
+    backend_callback_url = "https://nexora-backend-5pu6.onrender.com/api/admin/aliexpress/oauth/callback"
+    callback_url = backend_callback_url
+    authorization_url = (
+        "https://api-sg.aliexpress.com/oauth/authorize"
+        f"?response_type=code&client_id={settings.aliexpress_app_key}"
+        f"&redirect_uri={callback_url}"
+        "&state=nexora-aliexpress"
+    )
+    return AliExpressAuthUrlRead(authorization_url=authorization_url, callback_url=callback_url)
+
+
+@router.get("/aliexpress/oauth/callback", response_model=AliExpressOAuthCallbackRead)
+def aliexpress_oauth_callback(code: str | None = None, state: str | None = None, error: str | None = None) -> AliExpressOAuthCallbackRead:
+    if error:
+        return AliExpressOAuthCallbackRead(code=code, state=state, error=error, message="AliExpress authorization returned an error.")
+    return AliExpressOAuthCallbackRead(
+        code=code,
+        state=state,
+        message="Authorization code received. Copy this code and exchange it for tokens in the next setup step.",
     )
 
 

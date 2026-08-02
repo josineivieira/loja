@@ -12,3 +12,15 @@ class IntegrationStatusRead(BaseModel):
     email_provider: str
     email_configured: bool
     frontend_url: str
+
+
+class AliExpressAuthUrlRead(BaseModel):
+    authorization_url: str
+    callback_url: str
+
+
+class AliExpressOAuthCallbackRead(BaseModel):
+    code: str | None = None
+    state: str | None = None
+    error: str | None = None
+    message: str
