@@ -80,15 +80,15 @@ class SupplierService:
             variant_price = self._sale_price(variant_cost or payload.sale_price)
             self.repo.db.add(
                 ProductVariant(
-                product_id=product.id,
-                sku=self._unique_sku(f"{variant_data.sku.upper()}-CJ", ProductVariant),
-                supplier_variant_id=variant_data.supplier_variant_id,
-                price=variant_price,
-                cost=variant_cost,
-                stock=variant_data.stock,
-                image_url=variant_data.image_url or payload.image_url,
-                status="active",
-            )
+                    product_id=product.id,
+                    sku=self._unique_sku(f"{variant_data.sku.upper()}-CJ", ProductVariant),
+                    supplier_variant_id=variant_data.supplier_variant_id,
+                    price=variant_price,
+                    cost=variant_cost,
+                    stock=variant_data.stock,
+                    image_url=variant_data.image_url or payload.image_url,
+                    status="active",
+                )
             )
             if index == 0:
                 product.sale_price = variant_price
@@ -378,7 +378,7 @@ class SupplierService:
 
     def _pick(self, data: dict[str, Any], *keys: str) -> Any:
         for key in keys:
-            if key in data and data[key] not in {None, ""}:
+            if key in data and data[key] is not None and data[key] != "":
                 return data[key]
         return None
 

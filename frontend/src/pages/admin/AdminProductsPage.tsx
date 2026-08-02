@@ -84,8 +84,8 @@ export function AdminProductsPage() {
       });
       setProducts((items) => [imported, ...items]);
       setCjProducts((items) => items.filter((item) => item.supplier_product_id !== product.supplier_product_id));
-    } catch {
-      setError("Nao foi possivel importar. O produto pode ja existir ou a variante CJ nao veio com ID valido.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Nao foi possivel importar. O produto pode ja existir ou a variante CJ nao veio com ID valido.");
     }
   }
 
@@ -150,7 +150,7 @@ export function AdminProductsPage() {
                     <p className="mt-1 text-sm text-slate-600">CJ cost: USD {variant?.cost ?? "0"} - Stock {variant?.stock ?? 0}</p>
                     <p className="mt-1 text-xs text-slate-500">Sale price is calculated with the backend CJ markup settings.</p>
                   </div>
-                  <button className="h-10 rounded-md bg-primary px-4 text-sm font-semibold text-white disabled:bg-slate-300" disabled={!variant?.supplier_variant_id} onClick={() => variant && importProduct(product, variant)}>
+                  <button type="button" className="h-10 rounded-md bg-primary px-4 text-sm font-semibold text-white disabled:bg-slate-300" disabled={!variant?.supplier_variant_id} onClick={() => variant && importProduct(product, variant)}>
                     Import
                   </button>
                 </article>
