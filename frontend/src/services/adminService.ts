@@ -86,6 +86,10 @@ export async function updateAdminProduct(
   return data;
 }
 
+export async function deleteAdminProduct(productId: string) {
+  await api.delete(`/admin/products/${productId}`);
+}
+
 export async function searchCjProducts(query: string) {
   const { data } = await api.get<SupplierProduct[]>("/admin/supplier/cj/products", { params: { q: query } });
   return data;

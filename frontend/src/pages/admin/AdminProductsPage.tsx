@@ -4,6 +4,7 @@ import type { FormEvent } from "react";
 import { AdminTable } from "../../components/AdminTable";
 import {
   createAdminProduct,
+  deleteAdminProduct,
   estimateCjVariantShipping,
   importCjProduct,
   listAdminProducts,
@@ -288,6 +289,19 @@ export function AdminProductsPage() {
     }
   }
 
+  async function removeProduct(product: Product) {
+    const confirmed = window.confirm(`Excluir "${product.name}" do catalogo?`);
+    if (!confirmed) return;
+    setError(null);
+    try {
+      await deleteAdminProduct(product.id);
+      setProducts((items) => items.filter((item) => item.id !== product.id));
+      if (editingId === product.id) setEditingId(null);
+    } catch (err) {
+      setError(apiErrorMessage(err, "Nao foi possivel excluir o produto."));
+    }
+  }
+
   return (
     <div>
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
@@ -496,7 +510,10 @@ export function AdminProductsPage() {
             <td className="px-4 py-3">{product.variants.reduce((total, variant) => total + variant.stock, 0)}</td>
             <td className="px-4 py-3"><Status value={product.status} /></td>
             <td className="px-4 py-3">
+              <div className="flex flex-wrap gap-2">
               <button className="rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold" onClick={() => startEdit(product)}>Editar</button>
+                <button className="rounded-md border border-red-200 px-3 py-2 text-sm font-semibold text-danger" onClick={() => removeProduct(product)}>Excluir</button>
+              </div>
             </td>
           </tr>
         ))}
