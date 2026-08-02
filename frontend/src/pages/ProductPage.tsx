@@ -14,11 +14,14 @@ import type { Product, ProductVariant } from "../types/catalog";
 import type { ShippingQuote } from "../types/checkout";
 import type { Review } from "../types/engagement";
 import { formatMoney } from "../utils/currency";
+import { t } from "../utils/i18n";
+import { productDisplayDescription, productDisplayName, variantDisplayName } from "../utils/productPresentation";
 
 export function ProductPage() {
   const { slug } = useParams();
   const addItem = useCartStore((state) => state.addItem);
   const displayCurrency = usePreferencesStore((state) => state.currency);
+  const language = usePreferencesStore((state) => state.language);
   const toggleFavorite = useFavoritesStore((state) => state.toggle);
   const hasFavorite = useFavoritesStore((state) => state.has);
   const [product, setProduct] = useState<Product | null>(null);
@@ -31,6 +34,7 @@ export function ProductPage() {
   const [deliveryStatus, setDeliveryStatus] = useState<string | null>(null);
   const [deliveryVariantIds, setDeliveryVariantIds] = useState<string[]>([]);
   const [checkingDelivery, setCheckingDelivery] = useState(false);
+  const [showAllVariants, setShowAllVariants] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,6 +56,9 @@ export function ProductPage() {
   const canBuy = Boolean(product && selectedVariant && maxStock >= quantity);
   const compareAt = product?.compare_at_price ? Number(product.compare_at_price) : null;
   const displayPrice = useMemo(() => Number(selectedVariant?.price ?? product?.sale_price ?? 0), [product, selectedVariant]);
+  const displayName = product ? productDisplayName(product, language) : "";
+  const displayDescription = product ? productDisplayDescription(product, language) : "";
+  const visibleVariants = product ? (showAllVariants ? product.variants : product.variants.slice(0, 8)) : [];
 
   function handleAddToCart() {
     if (!product || !selectedVariant) return;
@@ -60,7 +67,7 @@ export function ProductPage() {
       productSlug: product.slug,
       variantId: selectedVariant.id,
       variantSku: selectedVariant.sku,
-      name: product.name,
+      name: displayName,
       imageUrl: activeImage,
       currency: product.currency,
       unitPrice: displayPrice,
@@ -73,7 +80,7 @@ export function ProductPage() {
     toggleFavorite({
       productId: product.id,
       productSlug: product.slug,
-      name: product.name,
+      name: displayName,
       imageUrl: activeImage,
       currency: product.currency,
       price: displayPrice,
@@ -115,7 +122,7 @@ export function ProductPage() {
       });
       setDeliveryQuotes(quotes);
       setDeliveryVariantIds([selectedVariant.id]);
-      setDeliveryStatus(quotes.length ? "Entrega disponivel para este destino." : "Ainda nao temos entrega disponivel para este destino.");
+      setDeliveryStatus(quotes.length ? t("deliveryAvailable", language) : t("deliveryUnavailable", language));
     } catch (error) {
       const available = [];
       for (const variant of product.variants.filter((item) => item.id !== selectedVariant.id)) {
@@ -138,30 +145,30 @@ export function ProductPage() {
         setSelectedVariant(available[0].variant);
         setDeliveryQuotes(available[0].quotes);
         setDeliveryVariantIds(available.map((item) => item.variant.id));
-        setDeliveryStatus("A variacao selecionada nao entrega nesse CEP. Selecionamos uma variacao disponivel para este destino.");
+        setDeliveryStatus(t("selectedVariantUnavailable", language));
       } else {
-        setDeliveryStatus(error instanceof Error ? error.message : "Ainda nao temos entrega disponivel para este destino.");
+        setDeliveryStatus(error instanceof Error ? error.message : t("deliveryUnavailable", language));
       }
     } finally {
       setCheckingDelivery(false);
     }
   }
 
-  if (loading) return <div className="mx-auto max-w-7xl px-4 py-12 text-slate-600">Loading product...</div>;
+  if (loading) return <div className="mx-auto max-w-7xl px-4 py-12 text-slate-600">{language === "pt" ? "Carregando produto..." : language === "es" ? "Cargando producto..." : "Loading product..."}</div>;
   if (error || !product) return <div className="mx-auto max-w-7xl px-4 py-12 text-danger">{error}</div>;
 
   return (
     <section className="mx-auto max-w-7xl px-4 py-8">
       <Seo
-        title={`${product.name} | Nexora`}
-        description={product.short_description ?? "Nexora smart gadget."}
+        title={`${displayName} | Nexora`}
+        description={displayDescription}
         canonicalPath={`/product/${product.slug}`}
         jsonLd={{
           "@context": "https://schema.org",
           "@type": "Product",
-          name: product.name,
+          name: displayName,
           sku: product.sku,
-          description: product.short_description,
+          description: displayDescription,
           image: activeImage ? [activeImage] : [],
           offers: { "@type": "Offer", price: displayPrice, priceCurrency: product.currency, availability: maxStock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock" },
         }}
@@ -169,13 +176,13 @@ export function ProductPage() {
       <div className="grid gap-10 lg:grid-cols-[1fr_0.9fr]">
         <div>
           <div className="aspect-square overflow-hidden rounded-lg bg-mist">
-            {activeImage ? <img className="h-full w-full object-cover" src={activeImage} alt={product.name} /> : <div className="grid h-full place-items-center text-slate-500">Nexora</div>}
+            {activeImage ? <img className="h-full w-full object-cover" src={activeImage} alt={displayName} /> : <div className="grid h-full place-items-center text-slate-500">Nexora</div>}
           </div>
           {product.images.length > 1 ? (
             <div className="mt-4 grid grid-cols-5 gap-3">
               {product.images.map((image) => (
                 <button key={image.id} className={`aspect-square overflow-hidden rounded-md border ${activeImage === image.url ? "border-primary" : "border-slate-200"}`} onClick={() => setActiveImage(image.url)}>
-                  <img className="h-full w-full object-cover" src={image.url} alt={image.alt_text ?? product.name} />
+                  <img className="h-full w-full object-cover" src={image.url} alt={image.alt_text ?? displayName} />
                 </button>
               ))}
             </div>
@@ -184,20 +191,28 @@ export function ProductPage() {
 
         <div>
           <p className="text-sm font-semibold uppercase text-primary">{product.sku}</p>
-          <h1 className="mt-3 text-3xl font-semibold md:text-4xl">{product.name}</h1>
-          <p className="mt-4 text-lg leading-8 text-slate-600">{product.short_description}</p>
+          <h1 className="mt-3 text-3xl font-semibold leading-tight md:text-4xl">{displayName}</h1>
+          <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600 md:text-lg">{displayDescription}</p>
           <div className="mt-6 flex items-end gap-3">
             <p className="text-3xl font-semibold">{formatMoney(displayPrice, product.currency, displayCurrency)}</p>
             {compareAt ? <p className="pb-1 text-slate-500 line-through">{formatMoney(compareAt, product.currency, displayCurrency)}</p> : null}
           </div>
 
           <div className="mt-8">
-            <p className="text-sm font-semibold">Model</p>
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-semibold">{t("model", language)}</p>
+              {product.variants.length > 8 ? (
+                <button className="text-sm font-semibold text-primary" onClick={() => setShowAllVariants((value) => !value)}>
+                  {showAllVariants ? (language === "pt" ? "Ver menos" : language === "es" ? "Ver menos" : "Show less") : `${language === "pt" ? "Ver todas" : language === "es" ? "Ver todas" : "Show all"} (${product.variants.length})`}
+                </button>
+              ) : null}
+            </div>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              {product.variants.map((variant) => (
+              {visibleVariants.map((variant, index) => (
                 <button key={variant.id} className={`rounded-md border p-3 text-left text-sm ${selectedVariant?.id === variant.id ? "border-primary bg-blue-50" : "border-slate-200"}`} onClick={() => setSelectedVariant(variant)}>
-                  <span className="block font-semibold">{variant.sku}</span>
-                  <span className="mt-1 block text-slate-600">{variant.stock > 0 ? `${variant.stock} in stock` : "Out of stock"}</span>
+                  <span className="block font-semibold">{variantDisplayName(index, language)}</span>
+                  <span className="mt-1 block text-xs text-slate-500">{variant.sku}</span>
+                  <span className="mt-1 block text-slate-600">{variant.stock > 0 ? `${variant.stock} ${t("inStockCount", language)}` : t("outOfStock", language)}</span>
                   {deliveryVariantIds.includes(variant.id) ? <span className="mt-1 block text-xs font-semibold text-emerald-700">Entrega nesse CEP</span> : null}
                 </button>
               ))}
@@ -208,27 +223,27 @@ export function ProductPage() {
             <QuantityStepper value={quantity} max={Math.max(1, maxStock)} onChange={setQuantity} />
             <button className="inline-flex h-10 items-center gap-2 rounded-md bg-primary px-5 text-sm font-semibold text-white hover:bg-primaryDark disabled:cursor-not-allowed disabled:bg-slate-300" disabled={!canBuy} onClick={handleAddToCart}>
               <ShoppingBag className="h-4 w-4" />
-              Add to cart
+              {t("addToCart", language)}
             </button>
             <button className="inline-flex h-10 items-center gap-2 rounded-md border border-slate-200 px-4 text-sm font-semibold hover:bg-mist" onClick={handleFavorite}>
               <Heart className="h-4 w-4" />
-              {hasFavorite(product.id) ? "Saved" : "Favorite"}
+              {hasFavorite(product.id) ? t("saved", language) : t("favorite", language)}
             </button>
           </div>
-          {!canBuy ? <p className="mt-3 text-sm text-danger">Select an available variant before adding this product to the cart.</p> : null}
+          {!canBuy ? <p className="mt-3 text-sm text-danger">{language === "pt" ? "Selecione uma opcao disponivel antes de adicionar ao carrinho." : language === "es" ? "Selecciona una opcion disponible antes de anadir al carrito." : "Select an available option before adding this product to the cart."}</p> : null}
 
           <section className="mt-8 rounded-lg border border-slate-200 p-4">
             <div className="flex items-center gap-2">
               <Truck className="h-5 w-5 text-primary" />
-              <h2 className="font-semibold">Consultar entrega</h2>
+              <h2 className="font-semibold">{t("checkDelivery", language)}</h2>
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-[88px_1fr_1fr_1fr_auto]">
-              <input className="h-10 rounded-md border border-slate-200 px-3 text-sm" placeholder="Pais" value={deliveryForm.country} onChange={(event) => setDeliveryForm({ ...deliveryForm, country: event.target.value.toUpperCase() })} maxLength={2} />
-              <input className="h-10 rounded-md border border-slate-200 px-3 text-sm" placeholder="CEP / codigo postal" value={deliveryForm.postal_code} onChange={(event) => setDeliveryForm({ ...deliveryForm, postal_code: event.target.value })} />
-              <input className="h-10 rounded-md border border-slate-200 px-3 text-sm" placeholder="Estado" value={deliveryForm.state} onChange={(event) => setDeliveryForm({ ...deliveryForm, state: event.target.value })} />
-              <input className="h-10 rounded-md border border-slate-200 px-3 text-sm" placeholder="Cidade" value={deliveryForm.city} onChange={(event) => setDeliveryForm({ ...deliveryForm, city: event.target.value })} />
+              <input className="h-10 rounded-md border border-slate-200 px-3 text-sm" placeholder={t("country", language)} value={deliveryForm.country} onChange={(event) => setDeliveryForm({ ...deliveryForm, country: event.target.value.toUpperCase() })} maxLength={2} />
+              <input className="h-10 rounded-md border border-slate-200 px-3 text-sm" placeholder={t("postalCode", language)} value={deliveryForm.postal_code} onChange={(event) => setDeliveryForm({ ...deliveryForm, postal_code: event.target.value })} />
+              <input className="h-10 rounded-md border border-slate-200 px-3 text-sm" placeholder={t("state", language)} value={deliveryForm.state} onChange={(event) => setDeliveryForm({ ...deliveryForm, state: event.target.value })} />
+              <input className="h-10 rounded-md border border-slate-200 px-3 text-sm" placeholder={t("city", language)} value={deliveryForm.city} onChange={(event) => setDeliveryForm({ ...deliveryForm, city: event.target.value })} />
               <button className="rounded-md bg-primary px-4 text-sm font-semibold text-white disabled:bg-slate-300" disabled={checkingDelivery || !selectedVariant || !deliveryForm.postal_code || !deliveryForm.state || !deliveryForm.city} onClick={checkDelivery}>
-                {checkingDelivery ? "Verificando..." : "Verificar"}
+                {checkingDelivery ? (language === "pt" ? "Verificando..." : language === "es" ? "Verificando..." : "Checking...") : (language === "pt" ? "Verificar" : language === "es" ? "Verificar" : "Check")}
               </button>
             </div>
             {deliveryStatus ? <p className={`mt-3 text-sm ${deliveryQuotes.length ? "text-emerald-700" : "text-danger"}`}>{deliveryStatus}</p> : null}
@@ -250,18 +265,18 @@ export function ProductPage() {
           <div className="mt-8 grid gap-3 text-sm sm:grid-cols-3">
             <div className="rounded-lg border border-slate-200 p-4">
               <Truck className="h-5 w-5 text-primary" />
-              <p className="mt-2 font-semibold">International shipping</p>
-              <p className="mt-1 text-slate-600">Delivery estimate is calculated at checkout by destination.</p>
+              <p className="mt-2 font-semibold">{t("internationalShippingCard", language)}</p>
+              <p className="mt-1 text-slate-600">{t("deliveryEstimateCheckout", language)}</p>
             </div>
             <div className="rounded-lg border border-slate-200 p-4">
               <ShieldCheck className="h-5 w-5 text-primary" />
-              <p className="mt-2 font-semibold">Secure checkout</p>
-              <p className="mt-1 text-slate-600">Payment handled by trusted providers.</p>
+              <p className="mt-2 font-semibold">{t("secureCheckoutCard", language)}</p>
+              <p className="mt-1 text-slate-600">{t("paymentTrusted", language)}</p>
             </div>
             <div className="rounded-lg border border-slate-200 p-4">
               <ShoppingBag className="h-5 w-5 text-primary" />
-              <p className="mt-2 font-semibold">Easy returns</p>
-              <p className="mt-1 text-slate-600">Policy prepared for global orders.</p>
+              <p className="mt-2 font-semibold">{t("easyReturnsCard", language)}</p>
+              <p className="mt-1 text-slate-600">{t("returnsGlobal", language)}</p>
             </div>
           </div>
         </div>
@@ -269,18 +284,18 @@ export function ProductPage() {
 
       <div className="mt-12 grid gap-8 lg:grid-cols-[1fr_320px]">
         <div>
-          <h2 className="text-xl font-semibold">Description</h2>
-          <p className="mt-3 leading-8 text-slate-600">{product.description}</p>
+          <h2 className="text-xl font-semibold">{t("description", language)}</h2>
+          <p className="mt-3 max-w-3xl leading-8 text-slate-600">{displayDescription}</p>
         </div>
         <div className="rounded-lg border border-slate-200 p-5">
-          <h2 className="text-base font-semibold">Specifications</h2>
+          <h2 className="text-base font-semibold">{t("specifications", language)}</h2>
           <dl className="mt-4 space-y-3 text-sm">
             <div className="flex justify-between gap-4">
-              <dt className="text-slate-500">Currency</dt>
+              <dt className="text-slate-500">{t("currency", language)}</dt>
               <dd>{product.currency}</dd>
             </div>
             <div className="flex justify-between gap-4">
-              <dt className="text-slate-500">Status</dt>
+              <dt className="text-slate-500">{t("status", language)}</dt>
               <dd>{product.status}</dd>
             </div>
             <div className="flex justify-between gap-4">
@@ -291,10 +306,10 @@ export function ProductPage() {
         </div>
       </div>
       <section className="mt-12">
-        <h2 className="text-xl font-semibold">Customer reviews</h2>
+        <h2 className="text-xl font-semibold">{t("customerReviews", language)}</h2>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           {reviews.length === 0 ? (
-            <div className="rounded-lg border border-slate-200 p-5 text-sm text-slate-600">No approved reviews yet.</div>
+            <div className="rounded-lg border border-slate-200 p-5 text-sm text-slate-600">{t("noReviews", language)}</div>
           ) : (
             reviews.map((review) => (
               <article key={review.id} className="rounded-lg border border-slate-200 p-5 shadow-sm">
@@ -311,7 +326,7 @@ export function ProductPage() {
         </div>
       </section>
       <Link to="/catalog" className="mt-10 inline-flex text-sm font-semibold text-primary">
-        Back to catalog
+        {t("backToCatalog", language)}
       </Link>
     </section>
   );
