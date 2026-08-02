@@ -530,6 +530,9 @@ class SupplierService:
                     for item in re.split(r"[,/\s]+", size_match.group(1))
                     if re.fullmatch(r"XXS|XS|S|M|L|XL|XXL|XXXL|2XL|3XL|4XL|5XL|\d{2,3}", item.strip().upper())
                 ]
+                alpha_sizes = [item for item in available_sizes if re.search(r"[A-Z]", item)]
+                if alpha_sizes:
+                    available_sizes = alpha_sizes
                 if available_sizes:
                     parsed["size"] = available_sizes[index % len(available_sizes)]
         if not parsed and tokens and not raw_name.upper().startswith("CJ"):

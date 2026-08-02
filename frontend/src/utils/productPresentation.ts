@@ -30,6 +30,14 @@ const titleRules: Array<{ match: RegExp; title: Record<Language, string> }> = [
     },
   },
   {
+    match: /连衣裙|吊带|度假风|印花|fabric name|skirt length|bust|cotton blended|summer.*dress|printed.*dress/i,
+    title: {
+      en: "Printed summer dress with thin straps",
+      pt: "Vestido estampado de verao com alcas finas",
+      es: "Vestido estampado de verano con tirantes finos",
+    },
+  },
+  {
     match: /seat\s*belt|safety\s*belt|belt\s*adjuster/i,
     title: {
       en: "Seat belt comfort adjuster",
@@ -82,6 +90,14 @@ const descriptionRules: Array<{ match: RegExp; description: Record<Language, str
     },
   },
   {
+    match: /连衣裙|吊带|度假风|印花|fabric name|skirt length|bust|cotton blended|summer.*dress|printed.*dress/i,
+    description: {
+      en: "Light printed summer dress with thin straps and a relaxed vacation style. Check the measurements before ordering; Asian sizes can run smaller than US/EU sizes.",
+      pt: "Vestido leve estampado para verao, com alcas finas e estilo casual de ferias. Confira as medidas antes de comprar; tamanhos asiaticos podem vestir menor que os padroes BR/EUA/Europa.",
+      es: "Vestido ligero estampado de verano, con tirantes finos y estilo casual de vacaciones. Revisa las medidas antes de comprar; las tallas asiaticas pueden ser mas pequenas.",
+    },
+  },
+  {
     match: /seat\s*belt|safety\s*belt|belt\s*adjuster/i,
     description: {
       en: "Compact accessory designed to reduce seat belt pressure around the neck and shoulder. Easy to attach, practical for daily driving and useful for improving comfort on longer trips.",
@@ -126,6 +142,17 @@ const phraseTranslations: Record<Language, Array<[RegExp, string]>> = {
     [/control seat belt tension freely/gi, "Controle livre da tensao do cinto"],
     [/tool-free (&amp;|&) instant installation/gi, "Instalacao rapida sem ferramentas"],
     [/features a simple clip-on or slider design/gi, "possui encaixe simples por clipe ou ajuste deslizante"],
+    [/fabric name/gi, "Tecido"],
+    [/cotton blended/gi, "mistura de algodao"],
+    [/main fabric composition/gi, "Composicao principal"],
+    [/polyester fiber \(polyester\)/gi, "fibra de poliester"],
+    [/the content of the main fabric ingredient/gi, "teor do ingrediente principal"],
+    [/skirt length/gi, "Comprimento"],
+    [/bust/gi, "Busto"],
+    [/asian sizes are 1 to 2 sizes smaller than european and american people/gi, "Tamanhos asiaticos costumam vestir 1 a 2 tamanhos menores que padroes europeus e americanos"],
+    [/choose the larger size if your size between two sizes/gi, "Escolha o tamanho maior se estiver entre dois tamanhos"],
+    [/please allow 2-3cm differences due to manual measurement/gi, "Pode haver diferenca de 2 a 3 cm por medicao manual"],
+    [/please check the size chart carefully before you buy the item/gi, "Confira a tabela de medidas antes da compra"],
     [/imported from cj.*$/gi, ""],
   ],
   es: [
@@ -237,10 +264,12 @@ export function variantDisplayOptions(product: Product, variant: ProductVariant,
   if (color) options[labels.color] = color;
 
   const sizeMatch = source.match(/size(?:\s*information)?\s*:?\s*([XSML0-9,\s/-]{1,40})/i);
-  const sizes = sizeMatch?.[1]
+  let sizes = sizeMatch?.[1]
     ?.split(/[,/ ]+/)
     .map((item) => item.trim().toUpperCase())
     .filter((item) => /^(XXS|XS|S|M|L|XL|XXL|XXXL|2XL|3XL|4XL|5XL|\d{2,3})$/.test(item));
+  const alphaSizes = sizes?.filter((item) => /[A-Z]/.test(item));
+  if (alphaSizes?.length) sizes = alphaSizes;
   if (sizes?.length) options[labels.size] = sizes[index % sizes.length];
   return options;
 }
