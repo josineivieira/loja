@@ -1,0 +1,3 @@
+class SupplierIntegrationError(Exception):
+    pass
+

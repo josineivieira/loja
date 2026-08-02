@@ -1,0 +1,68 @@
+databases:
+  - name: nexora-db
+    databaseName: nexora
+    user: nexora
+    plan: free
+
+services:
+  - type: web
+    name: nexora-backend
+    runtime: docker
+    rootDir: backend
+    plan: free
+    healthCheckPath: /health
+    dockerCommand: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-10000}"
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: nexora-db
+          property: connectionString
+      - key: JWT_SECRET_KEY
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: FRONTEND_URL
+        value: https://nexora-frontend.onrender.com
+      - key: CORS_ORIGINS
+        value: https://nexora-frontend.onrender.com
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: 30
+      - key: REFRESH_TOKEN_EXPIRE_DAYS
+        value: 14
+      - key: ADMIN_EMAIL
+        value: admin@nexora.local
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: EMAIL_PROVIDER
+        value: log
+      - key: EMAIL_FROM
+        value: no-reply@nexora.local
+
+  - type: web
+    name: nexora-frontend
+    runtime: static
+    rootDir: frontend
+    plan: free
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        value: https://nexora-backend.onrender.com/api
+      - key: VITE_DEFAULT_CURRENCY
+        value: USD
+      - key: VITE_DEFAULT_LANGUAGE
+        value: en
+      - key: VITE_ENABLE_DEMO_FALLBACK
+        value: false
+      - key: VITE_STRIPE_PUBLIC_KEY
+        sync: false

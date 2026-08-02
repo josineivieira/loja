@@ -1,0 +1,108 @@
+import { demoProducts } from "./demoCatalog";
+import type { AdminCollections } from "../types/admin";
+
+const now = new Date().toISOString();
+
+export const demoAdmin: AdminCollections = {
+  dashboard: {
+    sales_today: "184.90",
+    sales_month: "1284.30",
+    total_orders: 18,
+    pending_orders: 5,
+    paid_orders: 9,
+    shipped_orders: 3,
+    delivered_orders: 1,
+    cancelled_orders: 0,
+    average_order_value: "71.35",
+    new_customers: 12,
+    low_stock: 1,
+    failed_payments: 2,
+    supplier_pending: 6,
+  },
+  products: demoProducts,
+  orders: [
+    {
+      id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      order_number: "NX-DEMO-10482",
+      customer_email: "customer@example.com",
+      status: "awaiting_payment",
+      payment_status: "pending",
+      fulfillment_status: "pending",
+      supplier_status: "supplier_pending",
+      subtotal_amount: "108.00",
+      discount_amount: "10.80",
+      shipping_amount: "0.00",
+      tax_amount: "0.00",
+      total_amount: "97.20",
+      currency: "USD",
+      created_at: now,
+      items: [
+        {
+          product_id: demoProducts[0].id,
+          variant_id: demoProducts[0].variants[0].id,
+          product_name: demoProducts[0].name,
+          variant_sku: demoProducts[0].variants[0].sku,
+          quantity: 1,
+          unit_price: "49.00",
+          total_price: "49.00",
+          currency: "USD",
+        },
+      ],
+    },
+  ],
+  customers: [
+    {
+      id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+      email: "customer@example.com",
+      first_name: "Alex",
+      last_name: "Morgan",
+      is_active: true,
+      is_email_verified: true,
+      created_at: now,
+      roles: ["customer"],
+    },
+  ],
+  coupons: [
+    {
+      id: "ffffffff-ffff-4fff-8fff-ffffffffffff",
+      code: "WELCOME10",
+      name: "Welcome 10 percent",
+      discount_type: "percent",
+      value: "10.00",
+      minimum_amount: "25.00",
+      active: true,
+      created_at: now,
+      updated_at: now,
+    },
+    {
+      id: "99999999-9999-4999-8999-999999999999",
+      code: "NEXORA5",
+      name: "Nexora fixed discount",
+      discount_type: "fixed",
+      value: "5.00",
+      minimum_amount: "30.00",
+      active: true,
+      created_at: now,
+      updated_at: now,
+    },
+  ],
+  shippingMethods: [
+    {
+      id: "88888888-8888-4888-8888-888888888888",
+      name: "Standard Shipping",
+      code: "standard",
+      origin_country: "CN",
+      countries: [],
+      min_days: 10,
+      max_days: 20,
+      amount: "9.90",
+      currency: "USD",
+      tracking_available: true,
+      active: true,
+      free_over_amount: "100.00",
+      created_at: now,
+      updated_at: now,
+    },
+  ],
+};
+
