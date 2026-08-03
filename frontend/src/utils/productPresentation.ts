@@ -21,6 +21,14 @@ const genericDescription: Record<Language, string> = {
 
 const titleRules: Array<{ match: RegExp; title: Record<Language, string> }> = [
   {
+    match: /men'?s\s+shorts|sports?\s+shorts|casual\s+shorts|beach\s+shorts|bermuda|shorts/i,
+    title: {
+      en: "Men's casual sports shorts",
+      pt: "Bermuda masculina esportiva casual",
+      es: "Short deportivo casual masculino",
+    },
+  },
+  {
     match: /digital\s+watch|electronic\s+watch|men'?s\s+watch|bracelet\s+watch|popular\s+watches|relogio|rel[oó]gio/i,
     title: {
       en: "Men's digital sports watch",
@@ -113,6 +121,14 @@ const titleRules: Array<{ match: RegExp; title: Record<Language, string> }> = [
 
 const descriptionRules: Array<{ match: RegExp; description: Record<Language, string> }> = [
   {
+    match: /men'?s\s+shorts|sports?\s+shorts|casual\s+shorts|beach\s+shorts|bermuda|shorts/i,
+    description: {
+      en: "Comfortable men's shorts for casual wear, sports, beach days and daily outfits. Choose the color and size before adding it to the cart.",
+      pt: "Bermuda masculina confortavel para uso casual, esportes, praia e looks do dia a dia. Escolha a cor e o tamanho antes de adicionar ao carrinho.",
+      es: "Short masculino comodo para uso casual, deporte, playa y looks diarios. Elige color y talla antes de agregar al carrito.",
+    },
+  },
+  {
     match: /digital\s+watch|electronic\s+watch|men'?s\s+watch|bracelet\s+watch|popular\s+watches|relogio|rel[oó]gio/i,
     description: {
       en: "Lightweight digital sports watch for casual daily use, outdoor activities and simple time checking. Choose the color before adding it to the cart.",
@@ -199,8 +215,8 @@ const ptKeywordTitles: Array<[RegExp, string]> = [
   [/digital\s+watch|electronic\s+watch|men'?s\s+watch|bracelet\s+watch|popular\s+watches/i, "Relogio digital esportivo masculino"],
   [/spray\s+water\s+bottle|water\s+bottle.*spray|spray.*bottle/i, "Garrafa de agua com spray"],
   [/water\s+bottle|travel\s+bottle|drinkware|water\s+cup/i, "Garrafa de agua portatil"],
-  [/spray/i, "Garrafa spray portatil"],
-  [/fitness|sport/i, "Garrafa esportiva"],
+  [/sports?\s+bottle|fitness\s+bottle/i, "Garrafa esportiva"],
+  [/men'?s\s+shorts|sports?\s+shorts|casual\s+shorts|beach\s+shorts|shorts/i, "Bermuda masculina esportiva casual"],
   [/silicone.*valve|pressure\s+cooker.*valve|steam\s+release/i, "Valvula de silicone para panela de pressao"],
   [/storage|organizer/i, "Organizador compacto"],
   [/phone\s+stand|mobile\s+stand/i, "Suporte para celular"],
