@@ -90,7 +90,6 @@ class AliExpressProvider:
 
     def calculate_shipping(self, payload: dict[str, Any]) -> dict[str, Any]:
         product_id = payload.get("product_id") or payload.get("supplierProductId")
-        sku_attr = payload.get("sku_attr") or payload.get("supplierVariantId") or payload.get("vid")
         country = payload.get("country") or payload.get("endCountryCode") or payload.get("shippingCountryCode")
         quantity = int(payload.get("quantity") or 1)
         price = payload.get("price") or payload.get("unit_price") or payload.get("product_price")
@@ -105,44 +104,11 @@ class AliExpressProvider:
         }
         if price not in (None, ""):
             buyer_freight_dto["price"] = str(price)
-        legacy_freight_dto = {
-            "productId": str(product_id or ""),
-            "selectedSkuId": str(sku_attr or ""),
-            "selectedSkuAttr": str(sku_attr or ""),
-            "productNum": quantity,
-            "sendGoodsCountry": "CN",
-            "country": str(country or "").upper(),
-            "province": payload.get("state") or payload.get("shippingProvince") or "",
-            "city": payload.get("city") or payload.get("shippingCity") or "",
-            "zip": payload.get("postal_code") or payload.get("shippingZip") or "",
-            "currency": payload.get("currency", "USD"),
-            "locale": "pt_BR",
-        }
-        request_payload = {
-            "aeopFreightCalculateForBuyerDTO": legacy_freight_dto,
-            "target_currency": payload.get("currency", "USD"),
-            "locale": "pt_BR",
-        }
         errors: list[str] = []
         for method, method_payload in (
             (
                 "aliexpress.logistics.buyer.freight.calculate",
                 {"param_aeop_freight_calculate_for_buyer_d_t_o": buyer_freight_dto},
-            ),
-            ("aliexpress.ds.freight.query", request_payload),
-            (
-                "aliexpress.logistics.buyer.freight.get",
-                {
-                    "product_id": product_id,
-                    "sku_attr": sku_attr,
-                    "quantity": payload.get("quantity", 1),
-                    "ship_to_country": country,
-                    "province": payload.get("state") or payload.get("shippingProvince"),
-                    "city": payload.get("city") or payload.get("shippingCity"),
-                    "zip": payload.get("postal_code") or payload.get("shippingZip"),
-                    "target_currency": payload.get("currency", "USD"),
-                    "locale": "pt_BR",
-                },
             ),
         ):
             try:
@@ -153,7 +119,7 @@ class AliExpressProvider:
             quotes = self._shipping_rows(data)
             if quotes:
                 return {"quotes": quotes, "raw": data}
-        raise AliExpressError(errors[-1] if errors else "AliExpress did not return shipping options.")
+        raise AliExpressError(errors[0] if errors else "AliExpress did not return shipping options.")
 
     def create_supplier_order(self, order_payload: dict[str, Any]) -> dict[str, Any]:
         payload = self._to_order_payload(order_payload)
