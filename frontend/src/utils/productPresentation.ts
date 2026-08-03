@@ -21,6 +21,14 @@ const genericDescription: Record<Language, string> = {
 
 const titleRules: Array<{ match: RegExp; title: Record<Language, string> }> = [
   {
+    match: /digital\s+watch|electronic\s+watch|men'?s\s+watch|bracelet\s+watch|popular\s+watches|relogio|rel[oó]gio/i,
+    title: {
+      en: "Men's digital sports watch",
+      pt: "Relogio digital esportivo masculino",
+      es: "Reloj digital deportivo masculino",
+    },
+  },
+  {
     match: /men'?s\s+shirt|button\s+down\s+shirt|long\s+sleeve\s+lapel|business\s+shirt|casual\s+tops|camisa/i,
     title: {
       en: "Men's long sleeve button-down shirt",
@@ -105,6 +113,14 @@ const titleRules: Array<{ match: RegExp; title: Record<Language, string> }> = [
 
 const descriptionRules: Array<{ match: RegExp; description: Record<Language, string> }> = [
   {
+    match: /digital\s+watch|electronic\s+watch|men'?s\s+watch|bracelet\s+watch|popular\s+watches|relogio|rel[oó]gio/i,
+    description: {
+      en: "Lightweight digital sports watch for casual daily use, outdoor activities and simple time checking. Choose the color before adding it to the cart.",
+      pt: "Relogio digital esportivo leve para uso diario, atividades ao ar livre e consultas rapidas de horario. Escolha a cor antes de adicionar ao carrinho.",
+      es: "Reloj digital deportivo ligero para uso diario, actividades al aire libre y consulta rapida de la hora. Elige el color antes de agregar al carrito.",
+    },
+  },
+  {
     match: /men'?s\s+shirt|button\s+down\s+shirt|long\s+sleeve\s+lapel|business\s+shirt|casual\s+tops|camisa/i,
     description: {
       en: "Men's long sleeve button-down shirt with a clean casual-business look. Choose the color and Brazilian size before adding it to the cart.",
@@ -180,6 +196,7 @@ const descriptionRules: Array<{ match: RegExp; description: Record<Language, str
 ];
 
 const ptKeywordTitles: Array<[RegExp, string]> = [
+  [/digital\s+watch|electronic\s+watch|men'?s\s+watch|bracelet\s+watch|popular\s+watches/i, "Relogio digital esportivo masculino"],
   [/spray\s+water\s+bottle|water\s+bottle.*spray|spray.*bottle/i, "Garrafa de agua com spray"],
   [/water\s+bottle|travel\s+bottle|drinkware|water\s+cup/i, "Garrafa de agua portatil"],
   [/spray/i, "Garrafa spray portatil"],

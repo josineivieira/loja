@@ -327,6 +327,11 @@ class AliExpressProvider:
             images = product.get("ae_item_image_info_dtos")
             if isinstance(images, dict):
                 flattened["ae_item_image_info_dtos"] = images.get("ae_item_image_info_d_t_o") or images.get("item") or images
+            multimedia = product.get("ae_multimedia_info_dto")
+            if isinstance(multimedia, dict):
+                image_urls = multimedia.get("image_urls") or multimedia.get("imageUrls")
+                if image_urls:
+                    flattened["image_urls"] = image_urls
             skus = product.get("ae_item_sku_info_dtos")
             if isinstance(skus, dict):
                 flattened["ae_item_sku_info_dtos"] = skus.get("ae_item_sku_info_d_t_o") or skus.get("item") or skus

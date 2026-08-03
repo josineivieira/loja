@@ -642,11 +642,11 @@ class SupplierService:
         values = self._pick(detail, "productImageSet", "productImages", "images", "imageList", "productImage", "product_small_image_urls", "image_urls", "ae_item_image_info_dtos")
         images: list[str] = []
         if isinstance(values, str):
-            images.extend([item.strip() for item in values.split(",") if item.strip()])
+            images.extend([item.strip() for item in re.split(r"[;,]", values) if item.strip()])
         elif isinstance(values, dict):
             nested = self._pick(values, "string", "image", "images", "image_url", "imageUrl", "image_urls", "ae_item_image_info_d_t_o")
             if isinstance(nested, str):
-                images.extend([item.strip() for item in nested.split(",") if item.strip()])
+                images.extend([item.strip() for item in re.split(r"[;,]", nested) if item.strip()])
             elif isinstance(nested, list):
                 for item in nested:
                     if isinstance(item, str):
@@ -706,16 +706,45 @@ class SupplierService:
 
     def _map_supplier_variant(self, item: dict[str, Any], fallback_name: str, fallback_image: str | None) -> SupplierProductVariantRead:
         price = self._decimal(self._pick(item, "sellPrice", "price", "variantSellPrice", "listedPrice", "sku_price", "offer_sale_price"), Decimal("0"))
+        sku_image = self._first_image(self._pick(item, "variantImage", "sku_image", "image", "imageUrl", "image_url"))
+        nested_options = self._aliexpress_sku_properties(item)
+        if not sku_image:
+            sku_image = self._first_image(nested_options.pop("__image__", None))
         return SupplierProductVariantRead(
             supplier_variant_id=str(self._pick(item, "vid", "variantId", "skuId", "sku_id", "sku_attr", "id", "supplierVariantId") or ""),
             sku=str(self._pick(item, "variantSku", "sku", "sku_code", "skuCode", "skuId", "sku_id", "sku_attr", "variantKey", "variantNameEn") or "SUPPLIER-VARIANT"),
             name=self._english_first(item, "variantNameEn", "sku_attr", "nameEn", "variantKey", "variantName", "name") or fallback_name,
-            options=self._variant_options_from_raw(item, fallback_name),
+            options=nested_options or self._variant_options_from_raw(item, fallback_name),
             price=price,
             cost=self._decimal(self._pick(item, "costPrice", "variantStandard", "standard", "sku_price", "offer_sale_price", "price"), price),
             stock=int(self._decimal(self._pick(item, "stock", "inventory", "sellableQuantity", "ipm_sku_stock", "sku_available_stock"), Decimal("999"))),
-            image_url=self._first_image(self._pick(item, "variantImage", "sku_image", "image", "imageUrl", "image_url")) or fallback_image,
+            image_url=sku_image or fallback_image,
         )
+
+    def _aliexpress_sku_properties(self, item: dict[str, Any]) -> dict[str, str]:
+        raw = self._pick(item, "ae_sku_property_dtos", "sku_property_dtos", "skuPropertyList")
+        if isinstance(raw, dict):
+            raw = raw.get("ae_sku_property_d_t_o") or raw.get("sku_property") or raw.get("item") or raw.get("list")
+        if isinstance(raw, dict):
+            raw = [raw]
+        if not isinstance(raw, list):
+            return {}
+        options: dict[str, str] = {}
+        image: str | None = None
+        for prop in raw:
+            if not isinstance(prop, dict):
+                continue
+            name = self._pick(prop, "sku_property_name", "property_name", "name")
+            value = self._pick(prop, "property_value_definition_name", "sku_property_value", "property_value", "value")
+            if value in (None, "", "0"):
+                value = self._pick(prop, "sku_property_value", "property_value", "value")
+            if name and value not in (None, ""):
+                normalized_name = self._normalize_option_name(str(name))
+                options[normalized_name.title()] = self._translate_option_label(normalized_name, str(value))
+            image = image or self._first_image(self._pick(prop, "sku_image", "image", "image_url", "imageUrl"))
+        if image:
+            options["__image__"] = image
+        return options
 
     def _normalize_supplier_variants(self, variants: list[SupplierProductVariantRead], product_text: str) -> list[SupplierProductVariantRead]:
         if len(variants) < 2:
@@ -1035,7 +1064,8 @@ class SupplierService:
 
     def _first_image(self, value: Any) -> str | None:
         if isinstance(value, str):
-            return self._safe_url(value.split(",")[0].strip())
+            first = next((item.strip() for item in re.split(r"[;,]", value) if item.strip()), "")
+            return self._safe_url(first)
         if isinstance(value, dict):
             nested = self._pick(value, "string", "url", "image", "imageUrl", "image_url", "image_urls")
             return self._first_image(nested)
