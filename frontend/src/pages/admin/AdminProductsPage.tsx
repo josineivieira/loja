@@ -18,7 +18,7 @@ import {
 } from "../../services/adminService";
 import type { Product, SupplierProduct, SupplierShippingEstimate } from "../../types/catalog";
 import { formatMoney } from "../../utils/currency";
-import { presentSupplierDescription, presentSupplierName } from "../../utils/productPresentation";
+import { presentSupplierDescription } from "../../utils/productPresentation";
 import { AxiosError } from "axios";
 
 type ImportTab = "product" | "variants" | "media" | "description" | "shipping";
@@ -82,6 +82,11 @@ function apiErrorMessage(error: unknown, fallback: string) {
 
 function hasCjk(value?: string | null) {
   return /[\u3400-\u9fff]/.test(value ?? "");
+}
+
+function supplierNameForImport(fullProduct: SupplierProduct, searchResult?: SupplierProduct) {
+  if (hasCjk(fullProduct.name) && searchResult?.name && !hasCjk(searchResult.name)) return searchResult.name;
+  return fullProduct.name || searchResult?.name || "Produto importado";
 }
 
 function cleanVariantOptions(options: Record<string, string>) {
@@ -185,10 +190,10 @@ export function AdminProductsPage() {
         importProvider === "aliexpress"
           ? await previewAliExpressProduct(product.supplier_product_id)
           : await previewCjProduct(product.supplier_product_id).catch(() => product);
-      const displayNameSource = hasCjk(fullProduct.name) && !hasCjk(product.name) ? product.name : fullProduct.name;
+      const displayNameSource = supplierNameForImport(fullProduct, product);
       const displayDescriptionSource = fullProduct.description || product.description;
       const images = imageList(fullProduct);
-      const cleanName = presentSupplierName(displayNameSource, displayDescriptionSource, "pt");
+      const cleanName = displayNameSource;
       const cleanDescription = presentSupplierDescription(displayNameSource, displayDescriptionSource, "pt");
       const variants = fullProduct.variants
         .filter((variant) => variant.supplier_variant_id)
@@ -394,7 +399,7 @@ export function AdminProductsPage() {
                     {product.image_url ? <img src={product.image_url} alt={product.name} className="h-full w-full object-cover" /> : null}
                   </div>
                   <div>
-                    <h3 className="font-semibold">{presentSupplierName(product.name, product.description, "pt")}</h3>
+                    <h3 className="font-semibold">{product.name}</h3>
                     <p className="mt-1 text-sm text-slate-600">ID fornecedor: {product.supplier_product_id}</p>
                     <p className="mt-1 text-sm text-slate-600">Primeira variante: {variant?.supplier_variant_id || "sem ID"} - {variant?.sku}</p>
                     <p className="mt-1 text-sm text-slate-600">Custo fornecedor: {variant?.cost ?? "0"} - Estoque {variant?.stock ?? 0}</p>
