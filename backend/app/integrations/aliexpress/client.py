@@ -85,7 +85,7 @@ class AliExpressClient:
         return self.sync_method(method, payload, include_access_token=require_session)
 
     def _sign(self, api_path: str, payload: dict[str, Any]) -> str:
-        source = api_path + "".join(f"{key}{payload[key]}" for key in sorted(payload) if key != "sign")
+        source = api_path + "".join(f"{key}{self._encode_value(payload[key])}" for key in sorted(payload) if key != "sign")
         return hmac.new(self.app_secret.encode("utf-8"), source.encode("utf-8"), hashlib.sha256).hexdigest().upper()
 
     def _raise_sync_error(self, data: dict[str, Any]) -> None:
