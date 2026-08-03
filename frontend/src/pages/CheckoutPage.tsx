@@ -79,15 +79,15 @@ const checkoutCopy: Record<Language, Record<string, string>> = {
     taxes: "Taxes",
     total: "Total",
     currencyNote: "Reference display in {display}. Final charge is processed in {charge}.",
-    recalculationNote: "The system recalculates prices, discounts, shipping and stock before creating the order.",
+    recalculationNote: "Your total is checked again before payment.",
     postalLooking: "Looking up postal code...",
     postalNotFound: "Postal code not found.",
     postalFilled: "Address filled from postal code. Add the street number.",
     postalFailed: "Unable to look up postal code.",
     secureSummary: "Protected session",
-    secureSummaryCopy: "Encrypted checkout with final validation before payment.",
-    deliverySummary: "Shipping recalculation",
-    deliverySummaryCopy: "Destination and method are reviewed before the order is created.",
+    secureSummaryCopy: "Your payment details are handled by Stripe.",
+    deliverySummary: "Real delivery",
+    deliverySummaryCopy: "We check delivery options for your address before payment.",
     reviewSummary: "Final review",
     reviewSummaryCopy: "You approve totals and routing before payment starts.",
   },
@@ -130,12 +130,12 @@ const checkoutCopy: Record<Language, Record<string, string>> = {
     postalNotFound: "CEP não encontrado.",
     postalFilled: "Endereço preenchido pelo CEP. Adicione o número.",
     postalFailed: "Não foi possível consultar o CEP.",
-    secureSummary: "Sessão protegida",
-    secureSummaryCopy: "Checkout criptografado com validação final antes do pagamento.",
-    deliverySummary: "Recalculo do frete",
-    deliverySummaryCopy: "Destino e método são conferidos antes da criação do pedido.",
-    reviewSummary: "Revisão final",
-    reviewSummaryCopy: "Você confirma totais e rota do pedido antes do pagamento.",
+    secureSummary: "Pagamento seguro",
+    secureSummaryCopy: "Seus dados de pagamento ficam protegidos pelo Stripe.",
+    deliverySummary: "Entrega confirmada",
+    deliverySummaryCopy: "Consultamos as opcoes disponiveis para o seu endereco antes do pagamento.",
+    reviewSummary: "Revisao do pedido",
+    reviewSummaryCopy: "Voce confere os itens, entrega e total antes de pagar.",
   },
   es: {
     checkout: "Finalizar compra",
@@ -209,9 +209,10 @@ function shippingDisplayName(name: string, code: string, language: Language) {
 }
 
 function customerMessage(message: string) {
-  if (message.includes("Enter the delivery address")) return "Informe seu endereço de entrega para verificar disponibilidade e frete.";
-  if (message.includes("CJ did not return") || message.includes("shipping quote")) return "Ainda não temos entrega disponível para esse endereço com os produtos do carrinho. Confira o CEP ou escolha outro produto.";
-  if (message.includes("Delivery is not available")) return "Ainda não temos entrega disponível para esse endereço com os produtos do carrinho. Confira se o país, CEP, estado e cidade estão corretos.";
+  if (message.includes("Enter the delivery address")) return "Informe seu endereco de entrega para verificar disponibilidade e frete.";
+  if (message.includes("AliExpress shipping error") || message.includes("aeopFreightCalculateForBuyerDTO")) return "Nao foi possivel calcular a entrega deste item pelo fornecedor. Confira o endereco ou tente outro produto.";
+  if (message.includes("CJ did not return") || message.includes("shipping quote")) return "Ainda nao temos entrega disponivel para esse endereco com os produtos do carrinho. Confira o CEP ou escolha outro produto.";
+  if (message.includes("Delivery is not available")) return "Ainda nao temos entrega disponivel para esse endereco com os produtos do carrinho. Confira se o pais, CEP, estado e cidade estao corretos.";
   if (message.includes("without CJ variant IDs")) return "Este produto precisa ser atualizado antes de finalizar a compra.";
   return message;
 }
@@ -435,32 +436,29 @@ export function CheckoutPage() {
       ) : null}
 
       <div className="shell">
-        <div className="panel mb-8 overflow-hidden">
-          <div className="grid gap-6 p-6 md:p-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-end">
+        <div className="mb-8 border border-slate-200 bg-white px-5 py-6 shadow-[0_18px_60px_rgba(15,23,42,0.06)] md:px-8">
+          <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-end">
             <div>
-              <p className="eyebrow">Nexora secure checkout</p>
+              <p className="eyebrow">{language === "pt" ? "Compra segura" : language === "es" ? "Compra segura" : "Secure checkout"}</p>
               <h1 className="mt-4 text-4xl font-semibold tracking-[-0.05em] text-slate-950 md:text-5xl">{copy.checkout}</h1>
-              <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-600">
+              <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600">
                 {language === "pt"
-                  ? "Refizemos o checkout com aparência mais premium, hierarquia mais clara e uma sensação de confiança muito mais forte em cada etapa."
+                  ? "Confirme seus dados, confira a entrega disponivel para o seu endereco e finalize o pagamento em ambiente protegido."
                   : language === "es"
-                    ? "Rediseñamos el checkout con una apariencia más premium, jerarquía más clara y una sensación de confianza mucho más fuerte en cada etapa."
-                    : "The checkout has been redesigned with a more premium appearance, clearer hierarchy and stronger trust at every step."}
+                    ? "Confirma tus datos, revisa la entrega disponible para tu direccion y finaliza el pago en un ambiente protegido."
+                    : "Confirm your details, review delivery for your address and finish payment in a protected checkout."}
               </p>
             </div>
 
-            <div className="grid gap-3 text-sm text-slate-600 md:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
-              <div className="border border-slate-200 bg-[#f8f6f1] p-4">
+            <div className="grid gap-2 text-sm text-slate-700 sm:grid-cols-3 lg:w-[520px]">
+              <div className="border border-slate-200 px-4 py-3">
                 <p className="font-semibold text-slate-950">{copy.secureSummary}</p>
-                <p className="mt-2 leading-6">{copy.secureSummaryCopy}</p>
               </div>
-              <div className="border border-slate-200 bg-[#f8f6f1] p-4">
+              <div className="border border-slate-200 px-4 py-3">
                 <p className="font-semibold text-slate-950">{copy.deliverySummary}</p>
-                <p className="mt-2 leading-6">{copy.deliverySummaryCopy}</p>
               </div>
-              <div className="border border-slate-200 bg-[#f8f6f1] p-4">
+              <div className="border border-slate-200 px-4 py-3">
                 <p className="font-semibold text-slate-950">{copy.reviewSummary}</p>
-                <p className="mt-2 leading-6">{copy.reviewSummaryCopy}</p>
               </div>
             </div>
           </div>

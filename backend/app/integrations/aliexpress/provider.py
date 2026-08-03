@@ -92,11 +92,24 @@ class AliExpressProvider:
         product_id = payload.get("product_id") or payload.get("supplierProductId")
         sku_attr = payload.get("sku_attr") or payload.get("supplierVariantId") or payload.get("vid")
         country = payload.get("country") or payload.get("endCountryCode") or payload.get("shippingCountryCode")
-        freight_dto = {
+        quantity = int(payload.get("quantity") or 1)
+        price = payload.get("price") or payload.get("unit_price") or payload.get("product_price")
+        buyer_freight_dto = {
+            "product_id": int(product_id) if str(product_id or "").isdigit() else product_id,
+            "product_num": quantity,
+            "send_goods_country_code": payload.get("send_goods_country_code") or "CN",
+            "country_code": str(country or "").upper(),
+            "province_code": payload.get("state") or payload.get("shippingProvince") or "",
+            "city_code": payload.get("city") or payload.get("shippingCity") or "",
+            "price_currency": payload.get("currency", "USD"),
+        }
+        if price not in (None, ""):
+            buyer_freight_dto["price"] = str(price)
+        legacy_freight_dto = {
             "productId": str(product_id or ""),
             "selectedSkuId": str(sku_attr or ""),
             "selectedSkuAttr": str(sku_attr or ""),
-            "productNum": int(payload.get("quantity") or 1),
+            "productNum": quantity,
             "sendGoodsCountry": "CN",
             "country": str(country or "").upper(),
             "province": payload.get("state") or payload.get("shippingProvince") or "",
@@ -106,12 +119,16 @@ class AliExpressProvider:
             "locale": "pt_BR",
         }
         request_payload = {
-            "aeopFreightCalculateForBuyerDTO": freight_dto,
+            "aeopFreightCalculateForBuyerDTO": legacy_freight_dto,
             "target_currency": payload.get("currency", "USD"),
             "locale": "pt_BR",
         }
         errors: list[str] = []
         for method, method_payload in (
+            (
+                "aliexpress.logistics.buyer.freight.calculate",
+                {"param_aeop_freight_calculate_for_buyer_d_t_o": buyer_freight_dto},
+            ),
             ("aliexpress.ds.freight.query", request_payload),
             (
                 "aliexpress.logistics.buyer.freight.get",
@@ -231,6 +248,7 @@ class AliExpressProvider:
         for key in (
             "aliexpress_ds_freight_query_response",
             "aliexpress_logistics_buyer_freight_get_response",
+            "aliexpress_logistics_buyer_freight_calculate_response",
             "result",
             "resp_result",
             "logistics_result",
@@ -243,7 +261,9 @@ class AliExpressProvider:
                 or source.get("freight_list")
                 or source.get("shipping_methods")
                 or source.get("aeop_freight_calculate_result_for_buyer_d_t_o")
+                or source.get("aeop_freight_calculate_result_for_buyer_d_t_o_list")
                 or source.get("aeopFreightCalculateResultForBuyerDTO")
+                or source.get("aeopFreightCalculateResultForBuyerDTOList")
             )
         else:
             candidates = source
@@ -253,7 +273,9 @@ class AliExpressProvider:
                 or candidates.get("list")
                 or candidates.get("shipping_method")
                 or candidates.get("aeop_freight_calculate_result_for_buyer_d_t_o")
+                or candidates.get("aeop_freight_calculate_result_for_buyer_d_t_o_list")
                 or candidates.get("aeopFreightCalculateResultForBuyerDTO")
+                or candidates.get("aeopFreightCalculateResultForBuyerDTOList")
             )
         if not isinstance(candidates, list):
             candidates = [source] if isinstance(source, dict) else []
@@ -263,17 +285,21 @@ class AliExpressProvider:
                 continue
             name = self._first_present(item, "service_name", "company", "logistics_service_name", "shipping_method", "name") or "AliExpress Standard Shipping"
             amount = self._decimal(self._first_present(item, "freight_amount", "amount", "price", "shipping_fee", "delivery_fee"), Decimal("0"))
+            freight = item.get("freight")
+            if amount <= 0 and isinstance(freight, dict):
+                amount = self._decimal(self._first_present(freight, "amount"), Decimal("0"))
+                if amount <= 0 and freight.get("cent") not in (None, ""):
+                    amount = self._decimal(freight.get("cent"), Decimal("0")) / Decimal("100")
             if amount <= 0:
                 continue
-            min_days = self._safe_int(self._first_present(item, "delivery_min_days", "min_delivery_day", "min_days", "estimated_delivery_time_min")) or 10
-            max_days = self._safe_int(self._first_present(item, "delivery_max_days", "max_delivery_day", "max_days", "estimated_delivery_time_max")) or max(min_days, 25)
+            min_days, max_days = self._delivery_days(item)
             code = str(self._first_present(item, "service_name", "logistics_service_name", "code", "shipping_method") or name).lower().replace(" ", "_")[:70]
             quotes.append(
                 {
                     "code": f"aliexpress_{code}",
                     "name": str(name),
                     "amount": amount,
-                    "currency": str(self._first_present(item, "currency", "currency_code") or "USD").upper(),
+                    "currency": str(self._first_present(item, "currency", "currency_code") or (freight.get("currency_code") if isinstance(freight, dict) else None) or "USD").upper(),
                     "min_days": min_days,
                     "max_days": max_days,
                     "tracking_available": bool(self._first_present(item, "tracking", "tracking_available", "trackingAvailable") or True),
@@ -443,3 +469,16 @@ class AliExpressProvider:
             return int(value) if value not in (None, "") else None
         except Exception:
             return None
+
+    def _delivery_days(self, item: dict[str, Any]) -> tuple[int, int]:
+        min_days = self._safe_int(self._first_present(item, "delivery_min_days", "min_delivery_day", "min_days", "estimated_delivery_time_min"))
+        max_days = self._safe_int(self._first_present(item, "delivery_max_days", "max_delivery_day", "max_days", "estimated_delivery_time_max"))
+        estimate = self._first_present(item, "estimated_delivery_time", "estimatedDeliveryTime", "delivery_time", "deliveryTime")
+        if isinstance(estimate, str):
+            numbers = [int(value) for value in re.findall(r"\d+", estimate)]
+            if numbers:
+                min_days = min_days or numbers[0]
+                max_days = max_days or numbers[-1]
+        min_days = min_days or 10
+        max_days = max_days or max(min_days, 25)
+        return min_days, max_days

@@ -3,6 +3,13 @@ import { z } from "zod";
 const optionalText = (max: number) =>
   z.preprocess((value) => (typeof value === "string" && value.trim() === "" ? undefined : value), z.string().trim().max(max).optional());
 
+const phoneText = z
+  .string()
+  .trim()
+  .min(8, "Phone is required")
+  .max(40)
+  .refine((value) => value.replace(/\D/g, "").length >= 8, "Phone looks invalid");
+
 const realText = (label: string, min = 2, max = 120) =>
   z
     .string()
@@ -16,7 +23,7 @@ export const checkoutAddressSchema = z.object({
   first_name: realText("First name", 2, 80),
   last_name: realText("Last name", 2, 80),
   email: z.string().trim().email(),
-  phone: optionalText(40),
+  phone: phoneText,
   country: z.string().trim().length(2).transform((value) => value.toUpperCase()),
   state: realText("State", 2, 100),
   city: realText("City", 2, 120),
