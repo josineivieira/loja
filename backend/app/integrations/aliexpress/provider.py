@@ -1,5 +1,9 @@
 from decimal import Decimal
+import re
 from typing import Any
+from html import unescape
+import urllib.error
+import urllib.request
 
 from app.core.config import settings
 from app.integrations.aliexpress.client import AliExpressClient
@@ -81,7 +85,7 @@ class AliExpressProvider:
                 continue
             product = self._first_product(data)
             if product:
-                return product
+                return self._enrich_product_from_public_page(product_id, product)
         raise AliExpressError(errors[-1] if errors else "AliExpress product was not found.")
 
     def calculate_shipping(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -328,6 +332,52 @@ class AliExpressProvider:
                 flattened["ae_item_sku_info_dtos"] = skus.get("ae_item_sku_info_d_t_o") or skus.get("item") or skus
             return flattened
         return product
+
+    def _enrich_product_from_public_page(self, product_id: str, product: dict[str, Any]) -> dict[str, Any]:
+        has_image = any(product.get(key) for key in ("product_main_image_url", "product_small_image_urls", "image_urls", "ae_item_image_info_dtos"))
+        has_title = bool(self._first_present(product, "subject", "product_title", "title", "productTitle"))
+        has_description = bool(self._first_present(product, "product_detail", "detail", "description"))
+        if has_image and has_title and has_description:
+            return product
+        try:
+            request = urllib.request.Request(
+                f"https://www.aliexpress.com/item/{product_id}.html",
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
+                    "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+                },
+            )
+            with urllib.request.urlopen(request, timeout=12) as response:
+                html = response.read().decode("utf-8", errors="replace")
+        except (urllib.error.URLError, TimeoutError, OSError):
+            return product
+        enriched = dict(product)
+        title = self._meta_content(html, "og:title") or self._meta_content(html, "twitter:title")
+        description = self._meta_content(html, "og:description") or self._meta_content(html, "description")
+        image = self._meta_content(html, "og:image") or self._meta_content(html, "twitter:image")
+        if title and not has_title:
+            enriched["subject"] = title
+        if description and not has_description:
+            enriched["description"] = description
+        if image and not has_image:
+            enriched["product_main_image_url"] = image
+            enriched["product_small_image_urls"] = [image]
+        return enriched
+
+    def _meta_content(self, html: str, name: str) -> str | None:
+        patterns = (
+            rf'<meta[^>]+property=["\']{re.escape(name)}["\'][^>]+content=["\']([^"\']+)["\']',
+            rf'<meta[^>]+name=["\']{re.escape(name)}["\'][^>]+content=["\']([^"\']+)["\']',
+            rf'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']{re.escape(name)}["\']',
+            rf'<meta[^>]+content=["\']([^"\']+)["\'][^>]+name=["\']{re.escape(name)}["\']',
+        )
+        for pattern in patterns:
+            match = re.search(pattern, html, flags=re.IGNORECASE)
+            if match:
+                value = unescape(match.group(1)).strip()
+                if value:
+                    return value
+        return None
 
     def _extract_product_id(self, query: str) -> str | None:
         if query.isdigit() and len(query) >= 8:

@@ -180,9 +180,16 @@ const descriptionRules: Array<{ match: RegExp; description: Record<Language, str
 ];
 
 const ptKeywordTitles: Array<[RegExp, string]> = [
+  [/spray\s+water\s+bottle|water\s+bottle.*spray|spray.*bottle/i, "Garrafa de agua com spray"],
   [/water\s+bottle|travel\s+bottle|drinkware|water\s+cup/i, "Garrafa de agua portatil"],
   [/spray/i, "Garrafa spray portatil"],
   [/fitness|sport/i, "Garrafa esportiva"],
+  [/silicone.*valve|pressure\s+cooker.*valve|steam\s+release/i, "Valvula de silicone para panela de pressao"],
+  [/storage|organizer/i, "Organizador compacto"],
+  [/phone\s+stand|mobile\s+stand/i, "Suporte para celular"],
+  [/phone\s+case|case\s+for/i, "Capa para celular"],
+  [/keychain|key\s+chain/i, "Chaveiro"],
+  [/earrings?|bracelet|necklace/i, "Acessorio feminino"],
   [/kitchen\s+gadgets?/i, "Acessorio util para cozinha"],
   [/outdoor/i, "Acessorio para uso externo"],
   [/bottle/i, "Garrafa portatil"],
@@ -273,7 +280,7 @@ export function presentSupplierName(name?: string | null, description?: string |
   if (language === "pt") {
     const keywordTitle = ptKeywordTitles.find(([pattern]) => pattern.test(source))?.[1];
     if (keywordTitle) return keywordTitle;
-    if (/[a-z]{4,}\s+[a-z]{4,}/i.test(cleaned)) return "Produto importado selecionado";
+    if (/[a-z]{4,}\s+[a-z]{4,}/i.test(cleaned)) return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
   }
   return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
 }

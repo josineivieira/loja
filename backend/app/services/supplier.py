@@ -531,7 +531,7 @@ class SupplierService:
 
     def _map_supplier_product(self, item: dict[str, Any], provider: str = "cj") -> SupplierProductRead:
         fallback = "AliExpress Product" if provider == "aliexpress" else "CJ Product"
-        supplier_product_id = str(self._pick(item, "pid", "productId", "product_id", "ae_product_id", "id", "supplierProductId", "productSku", "spu", "productCode", "productNo") or "")
+        supplier_product_id = str(self._pick(item, "pid", "productId", "product_id", "ae_product_id", "product_id", "id", "supplierProductId", "productSku", "spu", "productCode", "productNo") or "")
         name = self._clean_title(str(self._english_first(item, "subject", "product_title", "productTitle", "productNameEn", "nameEn", "title", "variantNameEn", "productName", "productNameCn", "name") or fallback))
         image_url = self._first_image(
             self._pick(
@@ -547,6 +547,7 @@ class SupplierService:
                 "productImages",
                 "variantImage",
                 "product_small_image_urls",
+                "image_urls",
                 "ae_item_image_info_dtos",
             )
         )
@@ -555,11 +556,11 @@ class SupplierService:
             variants_raw = variants_raw.get("ae_item_sku_info_d_t_o") or variants_raw.get("sku_info") or variants_raw.get("item") or []
         variants = [self._map_supplier_variant(variant, name, image_url) for variant in variants_raw if isinstance(variant, dict)]
         if not variants:
-            supplier_variant_id = str(self._pick(item, "vid", "variantId", "id") or supplier_product_id)
+            supplier_variant_id = str(self._pick(item, "vid", "variantId", "skuId", "sku_id", "sku_attr", "id") or supplier_product_id)
             variants = [
                 SupplierProductVariantRead(
                     supplier_variant_id=supplier_variant_id,
-                    sku=str(self._pick(item, "productSku", "sku", "sku_code", "productNum") or f"{provider.upper()}-{supplier_product_id}"),
+                    sku=str(self._pick(item, "productSku", "sku", "sku_code", "skuId", "sku_id", "productNum") or f"{provider.upper()}-{supplier_product_id}"),
                     name=name,
                     options=self._variant_options_from_raw(item, name),
                     price=self._decimal(self._pick(item, "sellPrice", "price", "productPrice", "listedPrice"), Decimal("0")),
@@ -573,7 +574,7 @@ class SupplierService:
         return SupplierProductRead(
             supplier_product_id=supplier_product_id,
             name=name,
-            sku=str(self._pick(item, "productSku", "sku", "productNum") or f"{provider.upper()}-{supplier_product_id}"),
+            sku=str(self._pick(item, "productSku", "sku", "sku_code", "productNum") or f"{provider.upper()}-{supplier_product_id}"),
             description=description,
             image_url=image_url,
             images=self._images(item, image_url),
@@ -638,12 +639,12 @@ class SupplierService:
         ]
 
     def _images(self, detail: dict[str, Any], fallback: str | None) -> list[str]:
-        values = self._pick(detail, "productImageSet", "productImages", "images", "imageList", "productImage", "product_small_image_urls", "ae_item_image_info_dtos")
+        values = self._pick(detail, "productImageSet", "productImages", "images", "imageList", "productImage", "product_small_image_urls", "image_urls", "ae_item_image_info_dtos")
         images: list[str] = []
         if isinstance(values, str):
             images.extend([item.strip() for item in values.split(",") if item.strip()])
         elif isinstance(values, dict):
-            nested = self._pick(values, "string", "image", "images", "image_url", "imageUrl", "ae_item_image_info_d_t_o")
+            nested = self._pick(values, "string", "image", "images", "image_url", "imageUrl", "image_urls", "ae_item_image_info_d_t_o")
             if isinstance(nested, str):
                 images.extend([item.strip() for item in nested.split(",") if item.strip()])
             elif isinstance(nested, list):
@@ -651,7 +652,7 @@ class SupplierService:
                     if isinstance(item, str):
                         images.append(item)
                     elif isinstance(item, dict):
-                        image = self._pick(item, "url", "image", "imageUrl", "image_url")
+                        image = self._pick(item, "url", "image", "imageUrl", "image_url", "image_urls")
                         if image:
                             images.append(str(image))
         elif isinstance(values, list):
@@ -659,17 +660,20 @@ class SupplierService:
                 if isinstance(item, str):
                     images.append(item)
                 elif isinstance(item, dict):
-                    image = self._pick(item, "url", "image", "imageUrl", "image_url")
+                    image = self._pick(item, "url", "image", "imageUrl", "image_url", "image_urls")
                     if image:
                         images.append(str(image))
         if fallback:
             images.insert(0, fallback)
-        return list(dict.fromkeys(images))
+        safe_images = [safe for safe in (self._safe_url(image) for image in images) if safe]
+        return list(dict.fromkeys(safe_images))
 
     def _safe_url(self, value: str | None) -> str | None:
         if not value:
             return None
         cleaned = str(value).strip()
+        if cleaned.startswith("//"):
+            cleaned = f"https:{cleaned}"
         if not cleaned.startswith(("http://", "https://")):
             return None
         return cleaned[:700]
@@ -701,16 +705,16 @@ class SupplierService:
         return f"{fallback} importado do {provider} com variacoes prontas para checkout, frete e envio pelo fornecedor."
 
     def _map_supplier_variant(self, item: dict[str, Any], fallback_name: str, fallback_image: str | None) -> SupplierProductVariantRead:
-        price = self._decimal(self._pick(item, "sellPrice", "price", "variantSellPrice", "listedPrice"), Decimal("0"))
+        price = self._decimal(self._pick(item, "sellPrice", "price", "variantSellPrice", "listedPrice", "sku_price", "offer_sale_price"), Decimal("0"))
         return SupplierProductVariantRead(
-            supplier_variant_id=str(self._pick(item, "vid", "variantId", "sku_attr", "skuId", "sku_id", "id", "supplierVariantId") or ""),
-            sku=str(self._pick(item, "variantSku", "sku", "sku_code", "skuCode", "variantKey", "variantNameEn") or "SUPPLIER-VARIANT"),
+            supplier_variant_id=str(self._pick(item, "vid", "variantId", "skuId", "sku_id", "sku_attr", "id", "supplierVariantId") or ""),
+            sku=str(self._pick(item, "variantSku", "sku", "sku_code", "skuCode", "skuId", "sku_id", "sku_attr", "variantKey", "variantNameEn") or "SUPPLIER-VARIANT"),
             name=self._english_first(item, "variantNameEn", "sku_attr", "nameEn", "variantKey", "variantName", "name") or fallback_name,
             options=self._variant_options_from_raw(item, fallback_name),
             price=price,
             cost=self._decimal(self._pick(item, "costPrice", "variantStandard", "standard", "sku_price", "offer_sale_price", "price"), price),
-            stock=int(self._decimal(self._pick(item, "stock", "inventory", "sellableQuantity", "ipm_sku_stock"), Decimal("999"))),
-            image_url=self._first_image(self._pick(item, "variantImage", "sku_image", "image", "imageUrl")) or fallback_image,
+            stock=int(self._decimal(self._pick(item, "stock", "inventory", "sellableQuantity", "ipm_sku_stock", "sku_available_stock"), Decimal("999"))),
+            image_url=self._first_image(self._pick(item, "variantImage", "sku_image", "image", "imageUrl", "image_url")) or fallback_image,
         )
 
     def _normalize_supplier_variants(self, variants: list[SupplierProductVariantRead], product_text: str) -> list[SupplierProductVariantRead]:
@@ -1031,13 +1035,16 @@ class SupplierService:
 
     def _first_image(self, value: Any) -> str | None:
         if isinstance(value, str):
-            return value.split(",")[0].strip()
+            return self._safe_url(value.split(",")[0].strip())
+        if isinstance(value, dict):
+            nested = self._pick(value, "string", "url", "image", "imageUrl", "image_url", "image_urls")
+            return self._first_image(nested)
         if isinstance(value, list) and value:
             first = value[0]
             if isinstance(first, str):
-                return first
+                return self._safe_url(first)
             if isinstance(first, dict):
-                return self._pick(first, "url", "image", "imageUrl")
+                return self._first_image(self._pick(first, "url", "image", "imageUrl", "image_url", "image_urls"))
         return None
 
     def _decimal(self, value: Any, fallback: Decimal) -> Decimal:
