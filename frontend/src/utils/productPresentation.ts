@@ -332,10 +332,12 @@ export function presentSupplierDescription(name?: string | null, description?: s
 }
 
 export function productDisplayName(product: Product, language: Language) {
-  return presentSupplierName(product.name, product.short_description || product.description, language) || product.name;
+  return cleanSupplierText(product.name) || product.name || presentSupplierName(product.name, product.short_description || product.description, language);
 }
 
 export function productDisplayDescription(product: Product, language: Language) {
+  const savedDescription = cleanSupplierText(product.short_description || product.description);
+  if (savedDescription && !/imported from (cj|the supplier catalog)/i.test(savedDescription)) return savedDescription;
   return presentSupplierDescription(product.name, product.short_description || product.description, language);
 }
 
