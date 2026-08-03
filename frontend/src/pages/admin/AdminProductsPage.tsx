@@ -305,6 +305,7 @@ export function AdminProductsPage() {
           supplier_product_id: preview?.supplier_product_id,
           supplier_variant_id: variant.supplier_variant_id,
           quantity: 1,
+          price: parseAmount(variant.cost_price),
           country: shippingAddress.country.toUpperCase(),
           state: shippingAddress.state,
           city: shippingAddress.city,

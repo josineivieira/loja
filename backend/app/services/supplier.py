@@ -116,6 +116,7 @@ class SupplierService:
                     "supplierProductId": payload.supplier_product_id if hasattr(payload, "supplier_product_id") else None,
                     "supplierVariantId": payload.supplier_variant_id,
                     "quantity": payload.quantity,
+                    "price": payload.price,
                     "country": payload.country.upper(),
                     "state": payload.state,
                     "city": payload.city,

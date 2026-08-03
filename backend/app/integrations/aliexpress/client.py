@@ -67,6 +67,7 @@ class AliExpressClient:
             "format": "json",
             "method": method,
             "simplify": "true",
+            "v": "2.0",
             "timestamp": self._top_timestamp(),
             "sign_method": "sha256",
             **payload,

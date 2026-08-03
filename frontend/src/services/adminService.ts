@@ -116,6 +116,7 @@ export async function estimateCjVariantShipping(payload: {
   supplier_variant_id: string;
   supplier_product_id?: string;
   quantity: number;
+  price?: number;
   country: string;
   state: string;
   city: string;
@@ -129,13 +130,22 @@ export async function estimateAliExpressVariantShipping(payload: {
   supplier_variant_id: string;
   supplier_product_id?: string;
   quantity: number;
+  price?: number;
   country: string;
   state: string;
   city: string;
   postal_code: string;
 }) {
-  const { data } = await api.post<SupplierShippingEstimate[]>("/admin/supplier/aliexpress/shipping-estimate", payload);
-  return data;
+  try {
+    const { data } = await api.post<SupplierShippingEstimate[]>("/admin/supplier/aliexpress/shipping-estimate", payload);
+    return data;
+  } catch (error) {
+    const detail = isAxiosError(error) ? error.response?.data?.detail : undefined;
+    const message = Array.isArray(detail)
+      ? detail.map((item) => item?.msg || JSON.stringify(item)).join("; ")
+      : detail;
+    throw new Error(typeof message === "string" ? message : "Nao foi possivel consultar entrega no AliExpress.");
+  }
 }
 
 export async function importCjProduct(payload: {

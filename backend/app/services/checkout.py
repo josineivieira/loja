@@ -296,6 +296,7 @@ class CheckoutService:
                         "product_id": variant.product.supplier_product_id,
                         "supplierVariantId": line.supplier_variant_id,
                         "quantity": line.quantity,
+                        "price": line.unit_price,
                         "country": payload.address.country.upper(),
                         "state": payload.address.state,
                         "city": payload.address.city,
